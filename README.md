@@ -1,2 +1,4 @@
-# mobydump
-Grab the data from the MobyGames API and output it in a fashion that's useful for Exo projects.
+# MobyDump
+
+Downloads data from Moby Games and outputs it in a format suitable to import into
+Microsoft Access.
