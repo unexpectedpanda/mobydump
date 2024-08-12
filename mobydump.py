@@ -105,6 +105,9 @@ if os.getenv('MOBY_API'):
         if args.delimiter:
             delimiter = args.delimiter
 
+            # Deal with escaped characters like \t
+            delimiter = bytearray(delimiter, encoding='utf-8').decode('unicode_escape')
+
         # Retrieve the games for the platform
         eprint(f'Retrieving games from platform {platform} and outputting to {Font.b}{output_file}{Font.be}...\n\n')
 
