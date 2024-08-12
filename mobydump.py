@@ -105,8 +105,16 @@ if os.getenv('MOBY_API'):
         if args.delimiter:
             delimiter = args.delimiter
 
-            # Deal with escaped characters like \t
-            delimiter = bytearray(delimiter, encoding='utf-8').decode('unicode_escape')
+            # Limit delimiter to one byte, and deal with escaped characters like \t
+            encoded_delimiter: bytes = bytearray(delimiter, encoding='utf-8').decode('unicode_escape')
+
+            if len(encoded_delimiter) > 1:
+                eprint(
+                    f'Delimiter is more than one byte long in unicode ({delimiter} = {delimiter.encode('utf-8')}). '
+                    'Choose another character. Exiting...', level='error', indent=0)
+                sys.exit(1)
+
+            delimiter = encoded_delimiter
 
         # Retrieve the games for the platform
         eprint(f'Retrieving games from platform {platform} and outputting to {Font.b}{output_file}{Font.be}...\n\n')
