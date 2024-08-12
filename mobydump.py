@@ -8,6 +8,7 @@ https://github.com/unexpectedpanda/mobydump
 """
 
 import html
+import json
 import os
 import pandas as pd
 import requests
@@ -42,15 +43,16 @@ if os.getenv('MOBY_API'):
     # Get user input
     args = user_input()
 
-    # Set API request headers
+    # Set API request details
     headers: dict[str, str] = {'Accept': 'application/json'}
+    api_key: str = html.escape(os.getenv('MOBY_API'))
 
-    # Get the platforms
+    # Get the platforms if requested by the user
     if args.platforms:
         # Retrieve the platforms
         eprint('Retrieving platforms...')
 
-        url: str = f'https://api.mobygames.com/v1/platforms?api_key={html.escape(os.getenv('MOBY_API'))}'
+        url: str = f'https://api.mobygames.com/v1/platforms?api_key={api_key}'
 
         platforms: dict[list[dict, str|int]] = requests.get(url, headers=headers).json()
 
@@ -68,6 +70,7 @@ if os.getenv('MOBY_API'):
 
         sys.exit(0)
 
+    # Get the games if requested by the user
     if args.games:
         # Set the platform
         platform: int = args.games
@@ -89,6 +92,12 @@ if os.getenv('MOBY_API'):
 
         if args.output:
             output_file = args.output
+
+        # Set the output file type
+        output_file_type: int = 1
+
+        if args.filetype:
+            output_file_type = args.filetype
 
         # Set the delimiter
         delimiter: str = '\t'
@@ -162,7 +171,7 @@ if os.getenv('MOBY_API'):
 
                 eprint(f'• Requesting titles {offset}-{offset+offset_increment}...', overwrite=True)
 
-                url: str = f'https://api.mobygames.com/v1/games?api_key={os.getenv('MOBY_API')}&platform={platform}&offset={offset}&limit={offset_increment}'
+                url: str = f'https://api.mobygames.com/v1/games?api_key={api_key}&platform={platform}&offset={offset}&limit={offset_increment}'
 
                 # Increment the offset
                 offset = offset + offset_increment
@@ -200,17 +209,23 @@ if os.getenv('MOBY_API'):
                 eprint(err)
                 sys.exit(1)
 
+
         # Sort the list by title
         game_list = sorted(game_list, key=lambda d: d['title'])
 
-        # Create a Pandas dataframe from the JSON data
-        df = pd.json_normalize(game_list)
+        # Write the output file
+        if output_file_type == 1:
+            # Create a Pandas dataframe from the JSON data
+            df = pd.json_normalize(game_list)
 
-        # Clear out newlines
-        df = df.replace(r'\n',' ', regex=True)
+            # Clear out new lines
+            df = df.replace(r'\n',' ', regex=True)
 
-        # Write to delimited file
-        df.to_csv(output_file, index=False, encoding='utf-8', sep=delimiter)
+            # Write to delimited file
+            df.to_csv(output_file, index=False, encoding='utf-8', sep=delimiter)
+        elif output_file_type == 2:
+            with open(output_file, 'w', encoding='utf-8') as file:
+                file.write(json.dumps(game_list, indent=2))
 
 else:
     eprint(

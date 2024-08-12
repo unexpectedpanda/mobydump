@@ -46,6 +46,17 @@ def user_input() -> argparse.Namespace:
     )
 
     game_options.add_argument(
+        '-f', '--filetype',
+        metavar='<FILE_TYPE_ID>',
+        type=int,
+        help=f'R|The file type to output to. Defaults to {Font.b}1{Font.be}. Choose a number'
+        '\nfrom the following list:'
+        '\n\n1 - Delimiter separated value'
+        '\n2 - JSON'
+        '\n\n',
+    )
+
+    game_options.add_argument(
         '-o', '--output',
         metavar='"<FILENAME>"',
         type=str,
@@ -58,7 +69,7 @@ def user_input() -> argparse.Namespace:
         metavar='<SECONDS_PER_REQUEST>',
         type=str,
         help=f'R|How many seconds to wait between requests. Defaults to {Font.b}10{Font.be}.'
-        f'\nChoose from the following list:'
+        f'\nChoose a number from the following list:'
         '\n\n10 - MobyGames non-commercial free API key'
         '\n5  - MobyPro non-commercial API key'
         '\n\nUse lower numbers at your own risk.'
@@ -78,17 +89,6 @@ def user_input() -> argparse.Namespace:
         '\n\n',
     )
 
-    game_options.add_argument(
-        '-t', '--type',
-        metavar='<FILE_TYPE_ID>',
-        type=int,
-        help=f'R|The file type to output to. Choose a number from the'
-        '\nfollowing list:'
-        '\n\n1 - Delimiter Separated Value'
-        '\n2 - JSON'
-        '\n\n',
-    )
-
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)
@@ -100,30 +100,25 @@ def user_input() -> argparse.Namespace:
         eprint('Can\'t use --platforms and --games together. Exiting...', level='error')
         sys.exit(1)
 
-    if args.output and not args.games:
-        eprint('Must specify --games with --output. Exiting...', level='error')
-        sys.exit(1)
-
     if args.delimiter and not args.games:
         eprint('Must specify --games with --delimiter. Exiting...', level='error')
+        sys.exit(1)
+
+    if args.filetype and not args.games:
+        eprint('Must specify --games with --filetype. Exiting...', level='error')
+        sys.exit(1)
+
+    if args.filetype:
+        if args.filetype > 2 or args.filetype < 1:
+            eprint('Valid file types are 1 or 2. Exiting...', level='error')
+            sys.exit(1)
+
+    if args.output and not args.games:
+        eprint('Must specify --games with --output. Exiting...', level='error')
         sys.exit(1)
 
     if args.ratelimit and not args.games:
         eprint('Must specify --games with --ratelimit. Exiting...', level='error')
         sys.exit(1)
-
-    if args.ratelimit:
-        if args.ratelimit != 'free' and args.ratelimit != 'pro':
-            eprint(f'Valid API key types are {Font.b}free{Font.be} or {Font.b}pro{Font.be}. Exiting...', level='error', indent=0)
-            sys.exit(1)
-
-    if args.type and not args.games:
-        eprint('Must specify --games with --type. Exiting...', level='error')
-        sys.exit(1)
-
-    if args.type:
-        if args.type > 2 or args.type < 1:
-            eprint('Valid file types are 1 or 2. Exiting...', level='error')
-            sys.exit(1)
 
     return args
