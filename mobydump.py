@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
 """
-Downloads data from MobyGames and outputs it in a format suitable to import into
-Microsoft Access.
+Downloads data from MobyGames and outputs it to a delimiter-separated value file or JSON.
 
 https://github.com/unexpectedpanda/mobydump
 """
@@ -17,7 +16,6 @@ import sys
 
 from dotenv import load_dotenv
 from time import sleep
-from typing import Any
 
 from modules.input import user_input
 from modules.utils import eprint, Font
@@ -116,11 +114,9 @@ if os.getenv('MOBY_API'):
         game_list: list[dict, str|int] = []
 
         def add_games(games):
-            # Move the title to first in the list
+            # Rework data to be better suited to a database
             for values in games.values():
                 for value in values:
-                    value = {'title': value.pop('title'), **value}
-
                     # Format alternate titles field
                     if 'alternate_titles' in value:
                         alternate_titles: list[str] = []
@@ -135,16 +131,10 @@ if os.getenv('MOBY_API'):
 
                     # Format genre field
                     if 'genres' in value:
-                        genres: list[str] = []
-
                         for genre in value['genres']:
-                            if 'genre_name' in genre:
-                                genres.append(f'{genre["genre_category"]}: {genre["genre_name"]}')
+                            value[f'genres ({genre["genre_category"]})'] = genre["genre_name"]
 
-                        if genres:
-                            value['genres'] = ', '.join(genres)
-                        else:
-                            value['genres'] = ''
+                        del(value['genres'])
 
                     # Format platforms field
                     if 'platforms' in value:
@@ -212,15 +202,15 @@ if os.getenv('MOBY_API'):
                 eprint(err)
                 sys.exit(1)
             if err.response.status_code == 422:
-                eprint('The parameter sent was the right type, but was invalid')
+                eprint('The parameter sent was the right type, but was invalid.')
                 eprint(err)
                 sys.exit(1)
             if err.response.status_code == 429:
-                eprint('Too many requests, trying again in x seconds')
+                eprint('Too many requests, trying again in x seconds...')
                 eprint(err)
                 sys.exit(1)
             if err.response.status_code == 504:
-                eprint('Gateway timeout for URL, trying again in x seconds')
+                eprint('Gateway timeout for URL, trying again in x seconds...')
                 eprint(err)
                 sys.exit(1)
             else:
@@ -234,7 +224,7 @@ if os.getenv('MOBY_API'):
         # Write the output file
         if output_file_type == 1:
             # Create a Pandas dataframe from the JSON data to tabulate it easily
-            df = pd.json_normalize(game_list)
+            df = pd.json_normalize(game_list, max_level=1)
 
             # Clear out new lines from data
             df = df.replace(r'\n',' ', regex=True)
@@ -244,6 +234,45 @@ if os.getenv('MOBY_API'):
 
             # Remove null values
             df = df.replace([None, np.nan],'')
+
+            # Reorder data
+            def reorder_columns(new_position: int, new_name: str, original_name:str) -> None:
+                try:
+                    df.insert(new_position, new_name, df.pop(original_name))
+                except:
+                    pass
+
+            reorder_columns(0, 'Title', 'title')
+            reorder_columns(1, 'Alternative titles', 'alternate_titles')
+            reorder_columns(2, 'Game ID', 'game_id')
+            reorder_columns(3, 'MobyGames URL', 'moby_url')
+            reorder_columns(4, 'Platforms', 'platforms')
+            reorder_columns(5, 'Description', 'description')
+            reorder_columns(6, 'Official URL', 'official_url')
+            reorder_columns(7, 'MobyGames score', 'moby_score')
+            reorder_columns(8, 'Number of voters', 'num_votes')
+            reorder_columns(9, 'Sample cover image', 'sample_cover.image')
+            reorder_columns(10, 'Sample cover image width', 'sample_cover.width')
+            reorder_columns(11, 'Sample cover image height', 'sample_cover.height')
+            reorder_columns(12, 'Sample cover platforms', 'sample_cover.platforms')
+            reorder_columns(13, 'Sample cover thumbnail image', 'sample_cover.thumbnail_image')
+            reorder_columns(14, 'Sample screenshots', 'sample_screenshots')
+            reorder_columns(15, 'Genres (Basic)', 'genres (Basic Genres)')
+            reorder_columns(16, 'Genres (Perspective)', 'genres (Perspective)')
+            reorder_columns(17, 'Genres (Setting)', 'genres (Setting)')
+
+            # Move the genre columns to the end
+            last_changed_column = 17
+            genre_columns: list[str] = []
+
+            for column in df.columns:
+                if column.startswith('genre'):
+                    genre_columns.append(column)
+
+            genre_columns.sort(reverse=True)
+
+            for column in genre_columns:
+                df.insert(i+last_changed_column, column.replace('genres', 'Genres'), df.pop(column))
 
             # Pandas' to_csv function has a 1-character delimiter limit that prevents extended ASCII and Unicode
             # characters from being used. Work around this by writing dataframe contents directly to a file, and output

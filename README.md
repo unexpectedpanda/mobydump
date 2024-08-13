@@ -1,6 +1,6 @@
 # MobyDump
 
-Downloads data from MobyGames and outputs it in a delimiter-separated value file or JSON.
+Downloads data from MobyGames and outputs it to a delimiter-separated value file or JSON.
 
 ## Before you begin
 
