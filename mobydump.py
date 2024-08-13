@@ -9,6 +9,7 @@ https://github.com/unexpectedpanda/mobydump
 
 import html
 import json
+import numpy as np
 import os
 import pandas as pd
 import requests
@@ -105,16 +106,9 @@ if os.getenv('MOBY_API'):
         if args.delimiter:
             delimiter = args.delimiter
 
-            # Limit delimiter to one byte, and deal with escaped characters like \t
-            encoded_delimiter: bytes = bytearray(delimiter, encoding='utf-8').decode('unicode_escape')
-
-            if len(encoded_delimiter) > 1:
-                eprint(
-                    f'Delimiter is more than one byte long in unicode ({delimiter} = {delimiter.encode('utf-8')}). '
-                    'Choose another character. Exiting...', level='error', indent=0)
-                sys.exit(1)
-
-            delimiter = encoded_delimiter
+            # Deal with escaped characters like \t
+            if delimiter.startswith('\\'):
+                delimiter: bytes = bytearray(delimiter, encoding='utf-8').decode('unicode_escape')
 
         # Retrieve the games for the platform
         eprint(f'Retrieving games from platform {platform} and outputting to {Font.b}{output_file}{Font.be}...\n\n')
@@ -188,18 +182,27 @@ if os.getenv('MOBY_API'):
                 offset = offset + offset_increment
 
                 games = requests.get(url, headers=headers)
+
                 games.raise_for_status()
 
                 games=games.json()
 
-                # Break the loop if MobyGames returns an empty response, as we've reached the end
-                if not games['games']:
-                    eprint(f'\nFinished requesting all titles.', overwrite=True)
-                    break
-                else:
+                add_games(games)
+
+                # Break the loop if MobyGames returns an empty response or if there's less than 100 titles, as we've
+                # reached the end
+                if 'games' in games:
                     eprint(f'• Requesting titles {offset-offset_increment}-{offset}... done.\n', overwrite=True)
 
-                add_games(games)
+                    if len(games['games']) < 100:
+                        eprint(f'Finished requesting all titles.')
+                        break
+
+                elif not games['games']:
+                    eprint(f'\nFinished requesting all titles.', overwrite=True)
+                    break
+
+
         except requests.exceptions.Timeout:
             eprint('Timeout, trying again in x seconds')
             sys.exit(1)
@@ -216,6 +219,10 @@ if os.getenv('MOBY_API'):
                 eprint('Too many requests, trying again in x seconds')
                 eprint(err)
                 sys.exit(1)
+            if err.response.status_code == 504:
+                eprint('Gateway timeout for URL, trying again in x seconds')
+                eprint(err)
+                sys.exit(1)
             else:
                 eprint(err)
                 sys.exit(1)
@@ -226,14 +233,27 @@ if os.getenv('MOBY_API'):
 
         # Write the output file
         if output_file_type == 1:
-            # Create a Pandas dataframe from the JSON data
+            # Create a Pandas dataframe from the JSON data to tabulate it easily
             df = pd.json_normalize(game_list)
 
-            # Clear out new lines
+            # Clear out new lines from data
             df = df.replace(r'\n',' ', regex=True)
 
-            # Write to delimited file
-            df.to_csv(output_file, index=False, encoding='utf-8', sep=delimiter)
+            # Clear out tabs from data
+            df = df.replace(r'\t','    ', regex=True)
+
+            # Remove null values
+            df = df.replace([None, np.nan],'')
+
+            # Pandas' to_csv function has a 1-character delimiter limit that prevents extended ASCII and Unicode
+            # characters from being used. Work around this by writing dataframe contents directly to a file, and output
+            # with a BOM in the encoding so older Microsoft apps are happy.
+            with open(output_file, 'w', encoding='utf-8-sig') as file:
+                file.write(f'{delimiter}'.join(df.columns))
+                for dataframe_list in df.values.tolist():
+                    file.write('\n')
+                    file.write(f'{delimiter}'.join([str(x) for x in dataframe_list]))
+
         elif output_file_type == 2:
             with open(output_file, 'w', encoding='utf-8') as file:
                 file.write(json.dumps(game_list, indent=2))

@@ -80,12 +80,12 @@ def user_input() -> argparse.Namespace:
         '-s', '--startfrom',
         metavar='<OFFSET>',
         type=int,
-        help=f'R|The offset to start downloading at. Defaults to {Font.b}0{Font.be}. MobyGames'
-        '\nlimits the number of titles returned per requests to 100, so'
-        '\nmultiple requests need to be made to retrieve all the titles'
-        '\nthat belong to a platform.'
-        '\n\nOnly use if downloading was interrupted and you need to'
-        '\nrestart at a specific point'
+        help=f'R|The offset to start requesting titles at. Defaults to {Font.b}0{Font.be}.'
+        '\nMobyGames limits the number of titles returned per request'
+        '\nto 100, so multiple requests need to be made to retrieve all'
+        '\nthe titles that belong to a platform.'
+        '\n\nOnly use if retrieval was interrupted and you need to'
+        '\nrestart at a specific point.'
         '\n\n',
     )
 

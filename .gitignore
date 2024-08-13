@@ -164,3 +164,4 @@ cython_debug/
 # Test files
 test.json
 *.txt
+*.accdb
