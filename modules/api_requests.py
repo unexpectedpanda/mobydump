@@ -1,14 +1,22 @@
-import requests
 import sys
+
+import requests
 
 from modules.utils import eprint
 
 
 def mobygames_request(url: str) -> requests.models.Response:
-    headers: dict[str, str] = {'Accept': 'application/json'}
+    """
+    Requests data from the MobyGames API.
 
+    Args:
+        url (str): The URL to query, including query strings.
+
+    Returns:
+        requests.models.Response: The response from the MobyGames API.
+    """
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers={'Accept': 'application/json'})
 
         return response
     except requests.exceptions.Timeout:

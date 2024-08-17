@@ -1,0 +1,139 @@
+[project]
+name = "MobyDump"
+dynamic = ["version"]
+description = 'A GUI that sets stable controller IDs for MAME on Windows 10+'
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+keywords = ["MAME", "controller", "remap", "stable", "IDs"]
+authors = [
+  { name = "unexpectedpanda", email = "fake@example.com" },
+]
+
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "License :: OSI Approved :: BSD License",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+  "numpy >= 2.0.1",
+  "pandas >= 2.2.2",
+]
+
+[project.urls]
+Documentation = "https://github.com/unexpectedpanda/mobydump#readme"
+Issues = "https://github.com/unexpectedpanda/mobydump/issues"
+Source = "https://github.com/unexpectedpanda/mobydump"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Hatch
+[tool.hatch.version]
+path = "modules/constants.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mobydump.py", "modules"]
+
+[[tool.hatch.envs.all.matrix]]
+python = ["3.10", "3.11", "3.12"]
+
+[tool.hatch.envs.default.scripts]
+all = [
+    "hatch run style:fix",
+    "hatch run types:check",
+    "hatch run lint:check",
+]
+
+# Hatch lint setup and scripts
+[tool.hatch.envs.lint]
+detached = true
+dependencies = [
+    "codespell",
+]
+
+[tool.hatch.envs.lint.scripts]
+spelling = 'codespell mobydump.py modules *.* -L ue -S modules/gui/resources_rc.py'
+check = ["spelling"]
+
+# Hatch style setup and scripts
+[tool.hatch.envs.style]
+type = "pip-compile" # requires the hatch-pip-compile dependency
+detached = true
+dependencies = [
+    "black",
+    "isort",
+    "ruff",
+]
+
+[tool.hatch.envs.style.scripts]
+check = [
+    "isort --check-only --diff mobydump.py modules",
+    "black -q --check --diff mobydump.py modules",
+    "lint",
+]
+lint = [
+    "ruff check mobydump.py modules {args}"
+]
+
+fix = [
+    "lint --fix",
+    "format",
+]
+format = [
+    "isort -q mobydump.py modules",
+    "black -q mobydump.py modules",
+]
+
+# Hatch types setup and scripts
+[tool.hatch.envs.types]
+dependencies = [
+    "mypy>=1.8.0",
+]
+
+[tool.hatch.envs.types.scripts]
+check = [
+    "mypy --strict --install-types --non-interactive --python-version=3.10 mobydump.py",
+]
+
+# Hatch tool configuration
+[tool.black]
+line-length = 100
+skip-string-normalization = true
+extend-exclude = "(modules/gui/resources_rc.py|modules/gui/mobydump_.*.py)"
+
+[tool.isort]
+profile = "black"
+line_length = 100
+extend_skip=["modules/gui/resources_rc.py"]
+extend_skip_glob=["modules/gui/mobydump_*.py"]
+
+[tool.mypy]
+warn_unreachable = true
+no_implicit_optional = true
+show_error_codes = true
+
+[tool.ruff]
+lint.select = [
+    "F", "W", "E", "UP", "YTT", "C4", "DTZ", "FA", "ISC", "PIE", "T20", "RSE", "TCH",
+    "B002", "B003", "B005", "B007", "B009", "B012", "B013", "B014", "B015", "B018", "B020", "B021", "B023", "B026", "B033", "B034", "B905",
+    "COM818",
+    "D200", "D201", "D202", "D204", "D207", "D208", "D209", "D210", "D211", "D213", "D214", "D300", "D301", "D400", "D402", "D403", "D405", "D412", "D414", "D415", "D416", "D417", "D419",
+    "G010",
+    "PERF101",
+    "PGH004", "PGH005",
+    "FLY002",
+    "PLC", "PLE", "PLR0124", "PLR0133", "PLR0206", "PLR0402", "PLR1722", "PLW0120", "PLW0127", "PLW0129", "PLW0131", "PLW0406", "PLW0602", "PLW0603", "PLW0711",
+    "RUF001", "RUF005", "RUF007", "RUF010", "RUF013", "RUF100", "RUF200",
+    "SIM101", "SIM107", "SIM201", "SIM202", "SIM208", "SIM210", "SIM211", "SIM300", "SIM401", "SIM910",
+]
+lint.ignore = ["E501", "E731"]
+extend-exclude = ["modules/gui/resources_rc.py", "modules/gui/mobydump_*.py"]
+
+[tool.ruff.lint.flake8-comprehensions]
+allow-dict-calls-with-keyword-arguments = true

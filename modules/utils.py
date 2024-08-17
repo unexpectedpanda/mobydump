@@ -1,8 +1,8 @@
 import argparse
 import sys
 import textwrap
-
 from typing import Any
+
 
 def eprint(
     text: str = '', wrap=True, level='', indent: int = 2, pause=False, overwrite=False, **kwargs
@@ -76,6 +76,7 @@ def eprint(
             f'{empty_lines}{Font.d}Press enter to continue{Font.end}', file=sys.stderr
         )
         input()
+
 
 class Font:
     """Console text formatting."""

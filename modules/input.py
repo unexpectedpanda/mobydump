@@ -1,11 +1,17 @@
 import argparse
 import sys
-
 from typing import Any
 
-from modules.utils import eprint, Font, SmartFormatter
+from modules.utils import Font, SmartFormatter, eprint
+
 
 def user_input() -> argparse.Namespace:
+    """
+    Gets user input.
+
+    Returns:
+        argparse.Namespace: The arguments a user has provided.
+    """
     # Set up ArgParse
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
         allow_abbrev=False,
@@ -21,14 +27,15 @@ def user_input() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        '-p', '--platforms',
+        '-p',
+        '--platforms',
         action='store_true',
-        help='R|Get the platforms and their IDs from MobyGames.'
-        '\n\n',
+        help='R|Get the platforms and their IDs from MobyGames.\n\n',
     )
 
     parser.add_argument(
-        '-g', '--games',
+        '-g',
+        '--games',
         metavar='<PLATFORM_ID>',
         type=int,
         help='R|Get all game details from MobyGames that belong'
@@ -37,7 +44,8 @@ def user_input() -> argparse.Namespace:
     )
 
     game_options.add_argument(
-        '-d', '--delimiter',
+        '-d',
+        '--delimiter',
         metavar='"<DELIMITER>"',
         type=str,
         help=f'R|The single character delimiter to use in the output file.'
@@ -47,7 +55,8 @@ def user_input() -> argparse.Namespace:
     )
 
     game_options.add_argument(
-        '-f', '--filetype',
+        '-f',
+        '--filetype',
         metavar='<FILE_TYPE_ID>',
         type=int,
         help=f'R|The file type to output to. When not specified, defaults to {Font.b}1{Font.be}.'
@@ -58,7 +67,8 @@ def user_input() -> argparse.Namespace:
     )
 
     game_options.add_argument(
-        '-o', '--output',
+        '-o',
+        '--output',
         metavar='"<FILENAME>"',
         type=str,
         help=f'R|The filename to output to. When not specified, defaults to'
@@ -67,7 +77,8 @@ def user_input() -> argparse.Namespace:
     )
 
     game_options.add_argument(
-        '-r', '--ratelimit',
+        '-r',
+        '--ratelimit',
         metavar='<SECONDS_PER_REQUEST>',
         type=str,
         help=f'R|How many seconds to wait between requests. When not specified,'
@@ -84,7 +95,7 @@ def user_input() -> argparse.Namespace:
         '--raw',
         action='store_true',
         help=f'R|Don\'t format the output text or re-arrange columns. This is'
-        '\na compatiblity setting for if MobyGames changes its API responses.'
+        '\na compatibility setting for if MobyGames changes its API responses.'
         f'\nIgnored if type is set to {Font.b}JSON{Font.be}.'
         '\n\n',
     )
@@ -92,7 +103,7 @@ def user_input() -> argparse.Namespace:
     game_options.add_argument(
         '--restart',
         action='store_true',
-        help=f'R|By default, MobyDump keeps track of its request progress and'
+        help='R|By default, MobyDump keeps track of its request progress and'
         '\nresumes from the point at which it\'s interrupted. This is to deal'
         '\nwith events like internet dropping, MobyGames becoming'
         '\nnon-responsive, or power going out. To start requests again from'
