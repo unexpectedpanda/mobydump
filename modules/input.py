@@ -100,17 +100,6 @@ def user_input() -> argparse.Namespace:
         '\n\n',
     )
 
-    game_options.add_argument(
-        '--restart',
-        action='store_true',
-        help='R|By default, MobyDump keeps track of its request progress and'
-        '\nresumes from the point at which it\'s interrupted. This is to deal'
-        '\nwith events like internet dropping, MobyGames becoming'
-        '\nnon-responsive, or power going out. To start requests again from'
-        '\nthe beginning, or to update your local data, pass this flag.'
-        '\n\n',
-    )
-
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)

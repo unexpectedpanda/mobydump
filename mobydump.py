@@ -10,9 +10,11 @@ from __future__ import annotations
 import html
 import json
 import os
+import pathlib
 import sys
+from copy import deepcopy
 from time import sleep
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pandas as pd
 from dotenv import load_dotenv  # type: ignore
@@ -22,9 +24,6 @@ from modules.api_requests import mobygames_request
 from modules.data_sanitize import reorder_columns, sanitize_columns, sanitize_mobygames_response
 from modules.input import user_input
 from modules.utils import Font, eprint
-
-if TYPE_CHECKING:
-    import requests
 
 # Require at least Python 3.10.
 try:
@@ -62,25 +61,41 @@ if os.getenv('MOBY_API'):
     # ====================================================================================
     # Get platforms if requested by the user
     # ====================================================================================
-    if args.platforms:
-        # Make the request for the platforms
+    def get_platforms() -> dict[str, list[dict[str, str | int]]]:
+        """
+        Make the platform request, and write the results to a JSON file for an offline
+        cache.
+
+        Returns:
+            dict[str, list[dict[str, str | int]]]: The contents of the response, in JSON form.
+        """
         platforms: dict[str, list[dict[str, str | int]]] = mobygames_request(
-            f'https://api.mobygames.com/v1/platforms?api_key={api_key}', 'Retrieving platforms...'
+            f'https://api.mobygames.com/v1/platforms?api_key={api_key}', '• Retrieving platforms...'
         ).json()
+
+        eprint('• Retrieving platforms... done.', overwrite=True)
+
+        # Store the response in a file
+        if not pathlib.Path('cache').is_dir():
+            pathlib.Path('cache').mkdir(parents=True, exist_ok=True)
+
+        with open(pathlib.Path('cache/platforms.json'), 'w', encoding='utf-8') as platform_cache:
+            platform_cache.write(json.dumps(platforms, indent=4))
+
+        return platforms
+
+    if args.platforms:
+        platforms = get_platforms()
 
         # Sort the response by name
         platform_list: list[dict[str, str | int]] = sorted(
             platforms['platforms'], key=lambda d: d['platform_name']
         )
 
-        input(platforms['platforms'])
-        input(platform_list)
-
         # Get the longest platform name length for column formatting
         platform_width: int = max([len(str(x['platform_name'])) for x in platforms['platforms']])
 
         # Print the platforms
-        eprint('Retrieving platforms... done.', overwrite=True)
         eprint(f'\n{Font.b}{Font.u}{"NAME":<{platform_width+4}}{"ID":>5}{Font.end}\n')
         for platform in platform_list:
             eprint(
@@ -96,13 +111,6 @@ if os.getenv('MOBY_API'):
     if args.games:
         # Set the platform
         platform_id: int = args.games
-
-        #! TODO: Resume
-        # Set the offset
-        offset: int = 0
-
-        if args.restart:
-            offset = 0
 
         # Set the rate limit
         rate_limit: int = 10
@@ -143,12 +151,33 @@ if os.getenv('MOBY_API'):
                 )
                 sys.exit(1)
 
-        # Retrieve the games for the specified platform
-        eprint(
-            f'Retrieving games from platform {platform_id} and outputting to {Font.b}{output_file}{Font.be}...\n\n'
-        )
+        # Get the platform name if we know it already
+        platform_name: str = f'platform {platform_id!s}'
 
-        game_list: list[dict[str, Any]] = []
+        if not pathlib.Path('cache/platforms.json').is_file():
+            get_platforms()
+            eprint(f'• Waiting {rate_limit} seconds until next request...')
+
+            for j in range(rate_limit):
+                eprint(f'• Waiting {rate_limit-j} seconds until next request...', overwrite=True)
+                sleep(1)
+
+            # Delete the previous line printed to screen
+            eprint('\033M\033[2K\033M')
+
+        with open(pathlib.Path('cache/platforms.json'), encoding='utf-8') as platform_cache:
+            cached_platforms = json.load(platform_cache)
+
+            for cached_platform in cached_platforms['platforms']:
+                if cached_platform['platform_id'] == platform_id:
+                    platform_name = (
+                        f'the {Font.b}{cached_platform["platform_name"]}{Font.be} platform'
+                    )
+
+        # Retrieve the games for the specified platform
+        eprint(f'• Retrieving games from {platform_name}.')
+
+        games_list: list[dict[str, Any]] = []
 
         def add_games(games_dict: dict[str, Any]) -> None:
             """
@@ -157,20 +186,41 @@ if os.getenv('MOBY_API'):
             Args:
                 games_dict (dict[str, Any]): A response from the MobyGames API containing game details.
             """
-            for games_values in games_dict.values():
-                for game in games_values:
+            for game_values in games_dict.values():
+                for game_value in game_values:
                     # Rework data to be better suited to a database
                     if not args.raw:
-                        game = sanitize_mobygames_response(game)
+                        game_value = sanitize_mobygames_response(deepcopy(game_value))
 
-                    game_list.append(game)
+                    games_list.append(game_value)
+
+        # Read the platform contents cache file if it exists
+        platform_contents_cache: dict[str, Any] = {'finished': False}
+
+        if pathlib.Path(f'cache/{platform_id}.json').is_file():
+            with open(
+                pathlib.Path(f'cache/{platform_id}.json'), encoding='utf-8'
+            ) as platform_request_cache:
+                try:
+                    platform_contents_cache = json.load(platform_request_cache)
+                except Exception:
+                    pass
+
+        # Set the request offset
+        offset: int = 0
+        offset_increment: int = 100
+
+        # Change the offset if we need to resume
+        if len(platform_contents_cache) > 1 and not platform_contents_cache['finished']:
+            # Get the last key in the cache, and set the offset appropriately
+            offset = int(list(platform_contents_cache)[-1]) + offset_increment
+
+            eprint(f'• Request was previously interrupted, resuming from offset {offset}')
 
         # Get all the response pages for a platform, and add the games to a list
         i: int = 0
 
         while True:
-            offset_increment: int = 100
-
             # Wait for the rate limit after the first request
             if i > 0:
                 for j in range(rate_limit):
@@ -178,45 +228,102 @@ if os.getenv('MOBY_API'):
                         f'• Waiting {rate_limit-j} seconds until next request...', overwrite=True
                     )
                     sleep(1)
+
+                # Delete the previous line printed to screen
+                eprint('\033M\033[2K\033M')
             else:
                 i += 1
 
-            # Make the request
-            games: requests.models.Response = mobygames_request(
-                f'https://api.mobygames.com/v1/games?api_key={api_key}&platform={platform_id}&offset={offset}&limit={offset_increment}',
-                f'• Requesting titles {offset}-{offset+offset_increment}...',
-            )
+            # If there's a cache file and we need to resume, do so. Otherwise, ask the user if they want to redownload
+            # or write out from cache.
+            redownload: str = ''
 
-            games_dict: dict[str, Any] = games.json()
+            if platform_contents_cache['finished']:
+                while redownload != 'r' and redownload != 'w':
+                    eprint(
+                        f'\nThe {platform_name} platform has already been downloaded. Do you want to redownload (r), or write the file from cache (w)?',
+                        level='warning',
+                        indent=False,
+                    )
+                    redownload = input('\n> ')
+                    eprint('')
 
-            # Increment the offset
-            offset = offset + offset_increment
+            # User redownloads, or MobyDump auto-resumes because the request was previously marked as unfinished
+            if not platform_contents_cache['finished'] or redownload == 'r':
+                if redownload == 'r':
+                    # Delete the cache file and empty out platform_contents_cache
+                    pathlib.Path(f'cache/{platform_id}.json').unlink()
+                    platform_contents_cache = {'finished': False}
 
-            add_games(games_dict)
+                # Repopulate the games list if resuming
+                if not platform_contents_cache['finished']:
+                    for key, values in platform_contents_cache.items():
+                        if key != 'finished':
+                            add_games(values)
 
-            # Break the loop if MobyGames returns an empty response or if there's less than 100 titles, as we've
-            # reached the end
-            if 'games' in games_dict:
-                eprint(
-                    f'• Requesting titles {offset-offset_increment}-{offset}... done.\n',
-                    overwrite=True,
+                # Make the request for the platform's games
+                games: dict[str, Any] = mobygames_request(
+                    f'https://api.mobygames.com/v1/games?api_key={api_key}&platform={platform_id}&offset={offset}&limit={offset_increment}',
+                    f'• Requesting titles {offset}-{offset+offset_increment}...',
+                ).json()
+
+                # Add games to the cache, and then process them
+                if 'games' in games:
+                    if games['games']:
+                        platform_contents_cache[str(offset)] = games
+
+                add_games(games)
+
+                # Increment the offset
+                offset = offset + offset_increment
+
+                # Break the loop if MobyGames returns an empty response or if there's less than 100 titles, as we've
+                # reached the end
+                end_loop: bool = False
+                success_message: str = (
+                    f'{Font.success}Finished requesting all titles. Writing data to {Font.b}{output_file}{Font.be}...{Font.end}'
                 )
 
-                if len(games_dict['games']) < 100:
-                    eprint('Finished requesting all titles.')
-                    break
+                if 'games' in games:
+                    eprint(
+                        f'• Requesting titles {offset-offset_increment}-{offset}... done.\n',
+                        overwrite=True,
+                    )
 
-            elif not games_dict['games']:
-                eprint('\nFinished requesting all titles.', overwrite=True)
+                    if len(games['games']) < 100:
+                        eprint(success_message, wrap=False)
+                        platform_contents_cache['finished'] = True
+                        end_loop = True
+
+                elif not games['games']:
+                    eprint(f'\n{success_message}', wrap=False, overwrite=True)
+                    platform_contents_cache['finished'] = True
+                    end_loop = True
+            # If the user chooses to write the file from cache, process the games from there
+            elif redownload == 'w':
+                eprint('')
+                end_loop = True
+                for key, values in platform_contents_cache.items():
+                    if key != 'finished':
+                        add_games(values)
+
+            # Write the cache
+            with open(
+                pathlib.Path(f'cache/{platform_id}.json'), 'w', encoding='utf-8'
+            ) as platform_request_cache:
+                platform_request_cache.write(json.dumps(platform_contents_cache, indent=4))
+
+            # End the loop if needed
+            if end_loop:
                 break
 
         # Sort the game list by title
-        game_list = sorted(game_list, key=lambda d: d['title'])
+        games_list = sorted(games_list, key=lambda d: d['title'])
 
         # Write the output file
         if output_file_type == 1:
             # Create a Pandas dataframe from the JSON data to tabulate it easily
-            df = pd.json_normalize(game_list)
+            df = pd.json_normalize(games_list)
 
             # Sanitize data in the columns
             df = sanitize_columns(df)
@@ -230,7 +337,13 @@ if os.getenv('MOBY_API'):
 
         elif output_file_type == 2:
             with open(output_file, 'w', encoding='utf-8') as file:
-                file.write(json.dumps(game_list, indent=2))
+                file.write(json.dumps(games_list, indent=2))
+
+        eprint(
+            f'{Font.success}Finished requesting all titles. Writing data to {Font.b}{output_file}{Font.be}... done.{Font.end}',
+            overwrite=True,
+            wrap=False,
+        )
 
 else:
     eprint(
