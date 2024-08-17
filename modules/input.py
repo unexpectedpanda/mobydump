@@ -40,8 +40,9 @@ def user_input() -> argparse.Namespace:
         '-d', '--delimiter',
         metavar='"<DELIMITER>"',
         type=str,
-        help=f'R|The single character delimiter to use in the output'
-        f'\nfile. Defaults to {Font.b}tab{Font.be}. Ignored if type is set to JSON.'
+        help=f'R|The single character delimiter to use in the output file.'
+        f'\nAccepts single-byte characters only. When not specified,'
+        f'\ndefaults to {Font.b}tab{Font.be}. Ignored if type is set to {Font.b}JSON{Font.be}.'
         '\n\n',
     )
 
@@ -49,8 +50,8 @@ def user_input() -> argparse.Namespace:
         '-f', '--filetype',
         metavar='<FILE_TYPE_ID>',
         type=int,
-        help=f'R|The file type to output to. Defaults to {Font.b}1{Font.be}. Choose a number'
-        '\nfrom the following list:'
+        help=f'R|The file type to output to. When not specified, defaults to {Font.b}1{Font.be}.'
+        f'\nChoose a number from the following list:'
         '\n\n1 - Delimiter separated value'
         '\n2 - JSON'
         '\n\n',
@@ -60,7 +61,8 @@ def user_input() -> argparse.Namespace:
         '-o', '--output',
         metavar='"<FILENAME>"',
         type=str,
-        help=f'R|The filename to output to. Defaults to {Font.b}output.txt{Font.be}.'
+        help=f'R|The filename to output to. When not specified, defaults to'
+        f'\n{Font.b}output.txt{Font.be}.'
         '\n\n',
     )
 
@@ -68,24 +70,33 @@ def user_input() -> argparse.Namespace:
         '-r', '--ratelimit',
         metavar='<SECONDS_PER_REQUEST>',
         type=str,
-        help=f'R|How many seconds to wait between requests. Defaults to {Font.b}10{Font.be}.'
-        f'\nChoose a number from the following list:'
+        help=f'R|How many seconds to wait between requests. When not specified,'
+        f'\ndefaults to {Font.b}10{Font.be}. Choose a number from the following list:'
         '\n\n10 - MobyGames non-commercial free API key'
         '\n5  - MobyPro non-commercial API key'
-        '\n\nUse lower numbers at your own risk.'
+        '\n\nUse lower numbers at your own risk. Unless you have an'
+        '\nagreement with MobyGames, lower numbers than are suitable for'
+        '\nyour API key could get your client or API key banned.'
         '\n\n',
     )
 
     game_options.add_argument(
-        '-s', '--startfrom',
-        metavar='<OFFSET>',
-        type=int,
-        help=f'R|The offset to start requesting titles at. Defaults to {Font.b}0{Font.be}.'
-        '\nMobyGames limits the number of titles returned per request'
-        '\nto 100, so multiple requests need to be made to retrieve all'
-        '\nthe titles that belong to a platform.'
-        '\n\nOnly use if retrieval was interrupted and you need to'
-        '\nrestart at a specific point.'
+        '--raw',
+        action='store_true',
+        help=f'R|Don\'t format the output text or re-arrange columns. This is'
+        '\na compatiblity setting for if MobyGames changes its API responses.'
+        f'\nIgnored if type is set to {Font.b}JSON{Font.be}.'
+        '\n\n',
+    )
+
+    game_options.add_argument(
+        '--restart',
+        action='store_true',
+        help=f'R|By default, MobyDump keeps track of its request progress and'
+        '\nresumes from the point at which it\'s interrupted. This is to deal'
+        '\nwith events like internet dropping, MobyGames becoming'
+        '\nnon-responsive, or power going out. To start requests again from'
+        '\nthe beginning, or to update your local data, pass this flag.'
         '\n\n',
     )
 

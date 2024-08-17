@@ -19,3 +19,19 @@ to work. To do so:
 ## Using MobyDump
 
 Content content
+
+## Importing into Access 2013&ndash;2021
+
+1.  Open the file that MobyDump created.
+
+1.  Choose **Delimited** as the format.
+
+1.  Click **Next**.
+
+1.  Choose the delimiter.
+
+1.  Click **First row contains field names**.
+
+1.  Change **Text Qualifier** to `"`.
+
+1.  Click **Finish**.

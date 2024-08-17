@@ -74,11 +74,12 @@ if os.getenv('MOBY_API'):
         # Set the platform
         platform: int = args.games
 
+        #! TODO: Resume
         # Set the offset
         offset: int = 0
 
-        if args.startfrom:
-            offset = args.startfrom
+        if args.restart:
+            offset = 0
 
         # Set the rate limit
         rate_limit: int = 10
@@ -104,9 +105,17 @@ if os.getenv('MOBY_API'):
         if args.delimiter:
             delimiter = args.delimiter
 
+            encoded_delimiter: bytes = bytearray(delimiter, encoding='utf-8').decode('unicode_escape')
+
             # Deal with escaped characters like \t
             if delimiter.startswith('\\'):
-                delimiter: bytes = bytearray(delimiter, encoding='utf-8').decode('unicode_escape')
+                delimiter = encoded_delimiter
+
+            if len(encoded_delimiter) > 1:
+                eprint(
+                    f'Delimiter is more than one byte long in unicode ({delimiter} = {delimiter.encode('utf-8')}). '
+                    'Choose another character. Exiting...', level='error', indent=0)
+                sys.exit(1)
 
         # Retrieve the games for the platform
         eprint(f'Retrieving games from platform {platform} and outputting to {Font.b}{output_file}{Font.be}...\n\n')
@@ -115,40 +124,62 @@ if os.getenv('MOBY_API'):
 
         def add_games(games):
             # Rework data to be better suited to a database
-            for values in games.values():
-                for value in values:
-                    # Format alternate titles field
-                    if 'alternate_titles' in value:
-                        alternate_titles: list[str] = []
+            for games_values in games.values():
+                for game in games_values:
+                    if not args.raw:
+                        # Format alternate titles field
+                        if 'alternate_titles' in game:
+                            alternate_titles: list[str] = []
 
-                        for alternate_title in value['alternate_titles']:
-                            alternate_titles.append(f'{alternate_title["description"]}: {alternate_title["title"]}')
+                            for alternate_title in game['alternate_titles']:
+                                alternate_titles.append(f'{alternate_title["description"]}: {alternate_title["title"]}')
 
-                        if alternate_titles:
-                            value['alternate_titles'] = ', '.join(alternate_titles)
-                        else:
-                            value['alternate_titles'] = ''
+                            if alternate_titles:
+                                game['alternate_titles'] = ', '.join(alternate_titles)
+                            else:
+                                game['alternate_titles'] = ''
 
-                    # Format genre field
-                    if 'genres' in value:
-                        for genre in value['genres']:
-                            value[f'genres ({genre["genre_category"]})'] = genre["genre_name"]
+                        # Format genre field
+                        if 'genres' in game:
+                            if game['genres']:
+                                for genre in game['genres']:
+                                    game[f'genres ({genre["genre_category"]})'] = genre["genre_name"]
 
-                        del(value['genres'])
+                            del(game['genres'])
 
-                    # Format platforms field
-                    if 'platforms' in value:
-                        game_platforms: list[str] = []
+                        # Format platforms field
+                        if 'platforms' in game:
+                            if game['platforms']:
+                                game_platforms: list[str] = []
 
-                        for platforms in value['platforms']:
-                            game_platforms.append(f'{platforms["platform_name"]} ({platforms["first_release_date"]})')
+                                for platforms in game['platforms']:
+                                    game_platforms.append(f'{platforms["platform_name"]} ({platforms["first_release_date"]})')
 
-                        if platforms:
-                            value['platforms'] = ', '.join(game_platforms)
-                        else:
-                            value['platforms'] = ''
+                                if platforms:
+                                    game['platforms'] = ', '.join(game_platforms)
+                                else:
+                                    game['platforms'] = ''
 
-                    game_list.append(value)
+                        # Format images
+                        if 'sample_cover' in game:
+                            if game['sample_cover']:
+                                if 'platforms' in game['sample_cover']:
+                                    game['sample_cover']['platforms'] = game['sample_cover']['platforms'][0]
+
+                                for key in game['sample_cover']:
+                                    game[f'Sample cover {str(key).replace("_", " ")}'] = game['sample_cover'][key]
+
+                            del(game['sample_cover'])
+
+                        if 'sample_screenshots' in game:
+                            if game['sample_screenshots']:
+                                for i, screenshot in enumerate(game['sample_screenshots'], start=1):
+                                    for key, value in screenshot.items():
+                                        game[f'Screenshot {i} {key}'] = value
+
+                            del[game['sample_screenshots']]
+
+                    game_list.append(game)
 
         try:
             i: int = 0
@@ -199,22 +230,22 @@ if os.getenv('MOBY_API'):
         except requests.exceptions.HTTPError as err:
             if err.response.status_code == 401:
                 eprint('Unauthorized access. Have you provided a MobyGames API key?')
-                eprint(err)
+                eprint(f'\n{err}')
                 sys.exit(1)
             if err.response.status_code == 422:
                 eprint('The parameter sent was the right type, but was invalid.')
-                eprint(err)
+                eprint(f'\n{err}')
                 sys.exit(1)
             if err.response.status_code == 429:
                 eprint('Too many requests, trying again in x seconds...')
-                eprint(err)
+                eprint(f'\n{err}')
                 sys.exit(1)
             if err.response.status_code == 504:
                 eprint('Gateway timeout for URL, trying again in x seconds...')
-                eprint(err)
+                eprint(f'\n{err}')
                 sys.exit(1)
             else:
-                eprint(err)
+                eprint(f'\n{err}')
                 sys.exit(1)
 
 
@@ -224,64 +255,83 @@ if os.getenv('MOBY_API'):
         # Write the output file
         if output_file_type == 1:
             # Create a Pandas dataframe from the JSON data to tabulate it easily
-            df = pd.json_normalize(game_list, max_level=1)
+            df = pd.json_normalize(game_list)
 
             # Clear out new lines from data
-            df = df.replace(r'\n',' ', regex=True)
+            df = df.replace(r'\n', ' ', regex=True)
 
             # Clear out tabs from data
-            df = df.replace(r'\t','    ', regex=True)
+            df = df.replace(r'\t', '    ', regex=True)
+
+            # Normalize curly quotes and replace other problem characters
+            df = df.replace(['“', '”'], '"', regex=True).replace(['‘', '’'], '\'', regex=True).replace(['\u200b', '\u200c'], '', regex=True)
 
             # Remove null values
             df = df.replace([None, np.nan],'')
 
             # Reorder data
-            def reorder_columns(new_position: int, new_name: str, original_name:str) -> None:
-                try:
-                    df.insert(new_position, new_name, df.pop(original_name))
-                except:
-                    pass
+            if not args.raw:
+                def reorder_columns(new_position: int, new_name: str, original_name:str) -> int:
+                    try:
+                        df.insert(new_position, new_name, df.pop(original_name))
+                    except:
+                        pass
 
-            reorder_columns(0, 'Title', 'title')
-            reorder_columns(1, 'Alternative titles', 'alternate_titles')
-            reorder_columns(2, 'Game ID', 'game_id')
-            reorder_columns(3, 'MobyGames URL', 'moby_url')
-            reorder_columns(4, 'Platforms', 'platforms')
-            reorder_columns(5, 'Description', 'description')
-            reorder_columns(6, 'Official URL', 'official_url')
-            reorder_columns(7, 'MobyGames score', 'moby_score')
-            reorder_columns(8, 'Number of voters', 'num_votes')
-            reorder_columns(9, 'Sample cover image', 'sample_cover.image')
-            reorder_columns(10, 'Sample cover image width', 'sample_cover.width')
-            reorder_columns(11, 'Sample cover image height', 'sample_cover.height')
-            reorder_columns(12, 'Sample cover platforms', 'sample_cover.platforms')
-            reorder_columns(13, 'Sample cover thumbnail image', 'sample_cover.thumbnail_image')
-            reorder_columns(14, 'Sample screenshots', 'sample_screenshots')
-            reorder_columns(15, 'Genres (Basic)', 'genres (Basic Genres)')
-            reorder_columns(16, 'Genres (Perspective)', 'genres (Perspective)')
-            reorder_columns(17, 'Genres (Setting)', 'genres (Setting)')
+                    return new_position + 1
 
-            # Move the genre columns to the end
-            last_changed_column = 17
-            genre_columns: list[str] = []
+                column_number: int = 0
 
-            for column in df.columns:
-                if column.startswith('genre'):
-                    genre_columns.append(column)
+                column_number = reorder_columns(column_number, 'Title', 'title')
+                column_number = reorder_columns(column_number, 'Alternative titles', 'alternate_titles')
+                column_number = reorder_columns(column_number, 'Game ID', 'game_id')
+                column_number = reorder_columns(column_number, 'MobyGames URL', 'moby_url')
+                column_number = reorder_columns(column_number, 'Platforms and release dates', 'platforms')
+                column_number = reorder_columns(column_number, 'Description', 'description')
+                column_number = reorder_columns(column_number, 'Official URL', 'official_url')
+                column_number = reorder_columns(column_number, 'MobyGames score', 'moby_score')
+                column_number = reorder_columns(column_number, 'Number of voters', 'num_votes')
+                column_number = reorder_columns(column_number, 'Genres (Basic)', 'genres (Basic Genres)')
+                column_number = reorder_columns(column_number, 'Genres (Perspective)', 'genres (Perspective)')
+                column_number = reorder_columns(column_number, 'Genres (Setting)', 'genres (Setting)')
 
-            genre_columns.sort(reverse=True)
+                # Add the remaining genre columns
+                genre_columns: list[str] = []
 
-            for column in genre_columns:
-                df.insert(i+last_changed_column, column.replace('genres', 'Genres'), df.pop(column))
+                for column in df.columns:
+                    if column.startswith('genre'):
+                        genre_columns.append(column)
 
-            # Pandas' to_csv function has a 1-character delimiter limit that prevents extended ASCII and Unicode
-            # characters from being used. Work around this by writing dataframe contents directly to a file, and output
-            # with a BOM in the encoding so older Microsoft apps are happy.
-            with open(output_file, 'w', encoding='utf-8-sig') as file:
-                file.write(f'{delimiter}'.join(df.columns))
-                for dataframe_list in df.values.tolist():
-                    file.write('\n')
-                    file.write(f'{delimiter}'.join([str(x) for x in dataframe_list]))
+                genre_columns.sort(reverse=True)
+
+                for column in genre_columns:
+                    column_number = reorder_columns(column_number, column.replace('genres', 'Genres'), column)
+
+                # Add sample cover details
+                column_number = reorder_columns(column_number, 'Sample cover image', 'Sample cover image')
+                column_number = reorder_columns(column_number, 'Sample cover width', 'Sample cover width')
+                column_number = reorder_columns(column_number, 'Sample cover height', 'Sample cover height')
+                column_number = reorder_columns(column_number, 'Sample cover platforms', 'Sample cover platforms')
+                column_number = reorder_columns(column_number, 'Sample cover thumbnail image', 'Sample cover thumbnail image')
+                column_number = reorder_columns(column_number, 'Sample screenshots', 'Sample screenshots')
+
+                # Add screenshots
+                screenshot_columns: list[str] = []
+
+                for column in df.columns:
+                    if column.startswith('Screenshot'):
+                        screenshot_columns.append(column)
+
+                highest_screenshot_number: int = max([int(''.join(filter(str.isdigit, x))) for x in screenshot_columns])
+
+                for i in range(1, highest_screenshot_number + 1):
+                    column_number = reorder_columns(column_number, f'Screenshot {i} image', f'Screenshot {i} image')
+                    column_number = reorder_columns(column_number, f'Screenshot {i} width', f'Screenshot {i} width')
+                    column_number = reorder_columns(column_number, f'Screenshot {i} height', f'Screenshot {i} height')
+                    column_number = reorder_columns(column_number, f'Screenshot {i} caption', f'Screenshot {i} caption')
+                    column_number = reorder_columns(column_number, f'Screenshot {i} thumbnail image', f'Screenshot {i} thumbnail_image')
+
+            # Write to delimited file
+            df.to_csv(output_file, index=False, encoding='utf-8', sep=delimiter)
 
         elif output_file_type == 2:
             with open(output_file, 'w', encoding='utf-8') as file:
