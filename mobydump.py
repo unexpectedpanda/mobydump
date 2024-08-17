@@ -26,6 +26,13 @@ from modules.utils import Font, eprint
 if TYPE_CHECKING:
     import requests
 
+# Require at least Python 3.10.
+try:
+    assert sys.version_info >= (3, 10)
+except Exception:
+    eprint(f'You need Python 3.10 or higher to run MobyDump. You are running Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}', level='error')
+    sys.exit()
+
 # Get the contents of the .env file
 load_dotenv()
 
