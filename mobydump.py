@@ -30,7 +30,10 @@ if TYPE_CHECKING:
 try:
     assert sys.version_info >= (3, 10)
 except Exception:
-    eprint(f'You need Python 3.10 or higher to run MobyDump. You are running Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}', level='error')
+    eprint(
+        f'You need Python 3.10 or higher to run MobyDump. You are running Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}',
+        level='error',
+    )
     sys.exit()
 
 # Get the contents of the .env file
@@ -61,10 +64,8 @@ if os.getenv('MOBY_API'):
     # ====================================================================================
     if args.platforms:
         # Make the request for the platforms
-        eprint('Retrieving platforms...')
-
         platforms: dict[str, list[dict[str, str | int]]] = mobygames_request(
-            f'https://api.mobygames.com/v1/platforms?api_key={api_key}'
+            f'https://api.mobygames.com/v1/platforms?api_key={api_key}', 'Retrieving platforms...'
         ).json()
 
         # Sort the response by name
@@ -178,16 +179,13 @@ if os.getenv('MOBY_API'):
                     )
                     sleep(1)
             else:
-                i = i + 1
-
-            eprint(f'• Requesting titles {offset}-{offset+offset_increment}...', overwrite=True)
+                i += 1
 
             # Make the request
             games: requests.models.Response = mobygames_request(
-                f'https://api.mobygames.com/v1/games?api_key={api_key}&platform={platform_id}&offset={offset}&limit={offset_increment}'
+                f'https://api.mobygames.com/v1/games?api_key={api_key}&platform={platform_id}&offset={offset}&limit={offset_increment}',
+                f'• Requesting titles {offset}-{offset+offset_increment}...',
             )
-
-            games.raise_for_status()
 
             games_dict: dict[str, Any] = games.json()
 
