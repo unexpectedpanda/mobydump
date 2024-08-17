@@ -1,5 +1,5 @@
 import sys
-from time import sleep
+from time import gmtime, sleep, strftime
 
 import requests
 
@@ -70,7 +70,8 @@ def request_retry(
     Returns:
         requests.models.Response: The response from the MobyGames API.
     """
-    progressive_timeout: list[int] = [0, 60, 120, 300, 600, -1]
+    # Progressively increase the timeout with each retry
+    progressive_timeout: list[int] = [0, 60, 300, 600, 3600, -1]
 
     if progressive_timeout[timeout] == -1:
         eprint(
@@ -83,7 +84,7 @@ def request_retry(
     else:
         for j in range(progressive_timeout[timeout]):
             eprint(
-                f'• {error_message} Retry #{timeout} in {progressive_timeout[timeout] - j} seconds...',
+                f'• {error_message} Retry #{timeout} in {strftime("%H:%M:%S", gmtime(progressive_timeout[timeout] - j))}...',
                 level='warning',
                 overwrite=True,
                 wrap=False,
