@@ -49,7 +49,9 @@ if os.getenv('MOBY_API'):
     # Get the API key
     api_key: str = html.escape(str(os.getenv('MOBY_API')))
 
-    # Get the platforms if requested by the user
+    # ====================================================================================
+    # Get platforms if requested by the user
+    # ====================================================================================
     if args.platforms:
         # Make the request for the platforms
         eprint('Retrieving platforms...')
@@ -80,7 +82,9 @@ if os.getenv('MOBY_API'):
 
         sys.exit(0)
 
-    # Get the games if requested by the user
+    # ====================================================================================
+    # Get games if requested by the user
+    # ====================================================================================
     if args.games:
         # Set the platform
         platform_id: int = args.games
