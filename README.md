@@ -102,7 +102,7 @@ Next, get the games based on that platform ID.
 mobydump.py -g 35
 ```
 
-See [command line flags](#commmand-line-flags) for all the options you can set when
+See [command line flags](#command-line-flags) for all the options you can set when
 downloading the games for a platform.
 
 ### Command line flags

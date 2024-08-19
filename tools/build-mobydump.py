@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 """
-Build script for MobyDump on Windows
+Build script for MobyDump on Windows. Should be run from the root folder. For example,
+tools\build-mobydump.py
 """
 
 import pathlib
