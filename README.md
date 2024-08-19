@@ -8,6 +8,9 @@ HTTP error codes are received.
 
 ## Before you begin
 
+If you're not using the [compiled release](https://github.com/unexpectedpanda/mobydump/releases),
+you need to set up your development environment. To do so, complete the following steps:
+
 1.  [Install Python 3.10 or higher](https://www.python.org/).
 
 1.  Install the required dependencies.
@@ -16,17 +19,17 @@ HTTP error codes are received.
     pip install numpy pandas requests
     ```
 
-1.  Set the `MOBY_API` environment variable to your MobyGames API key for
-    MobyDump to work. To do so:
+No matter which version you use, you need to set up your MobyHames API key. To do so,
+complete the following steps:
 
-    1.  Create a file named `.env` in the same folder MobyDump is in.
+1.  Create a file named `.env` in the same folder MobyDump is in.
 
-    1.  Add your MobyGames API key as follows, replacing `<MOBYGAMES_API_KEY>` with your
-        API key:
+1.  Add your MobyGames API key as follows, replacing `<MOBYGAMES_API_KEY>` with your
+    API key:
 
-        ```none
-        MOBY_API="<MOBYGAMES_API_KEY>"
-        ```
+    ```none
+    MOBY_API="<MOBYGAMES_API_KEY>"
+    ```
 
 ## Using MobyDump
 
