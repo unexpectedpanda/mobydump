@@ -1,7 +1,8 @@
 # MobyDump
 
-MobyDump downloads data from the MobyGames API for a specific platform, and outputs it to
-a delimiter-separated value file or JSON. It's purpose-built for the [Exo projects](https://github.com/exoscoriae).
+MobyDump is a command line application that downloads data from the MobyGames API for a
+specific platform, and outputs it to a delimiter-separated value file or JSON. It's
+purpose-built for the [Exo projects](https://github.com/exoscoriae).
 
 MobyDump auto-resumes the download if the process is interrupted by the user, or if select
 HTTP error codes are received.
@@ -36,17 +37,75 @@ do so, complete the following steps:
 
 ## Using MobyDump
 
-Assuming Python is set up correctly, you can run MobyDump as follows:
+How you run MobyDump changes depending on your platform. Open a terminal, change to the
+folder MobyDump is in, and then run one of the following commands.
+
+* Linux and MacOS:
+
+    ```
+    python3 mobydump.py
+    ```
+
+* Windows:
+
+    ```
+    mobydump.py
+    ```
+
+    or
+
+    ```
+    python mobydump.py
+    ```
+
+* Windows compiled:
+
+    ```
+    mobydump
+    ```
+
+### Basic usage
+
+First get the platforms and their IDs.
 
 ```
-python3 mobydump.py
+mobydump.py -p
 ```
 
-On Windows, you can possibly run MobyDump directly:
+You receive a response that looks similar to the following example:
 
 ```
-mobydump.py
+NAME                                          ID
+
+1292 Advanced Programmable Video System      253
+3DO                                           35
+ABC 80                                       318
+APF MP1000/Imagination Machine               213
+Acorn 32-bit                                 117
+Adventure Vision                             210
+AirConsole                                   305
+Alice 32/90                                  194
+Altair 680                                   265
+Altair 8800                                  222
+Amazon Alexa                                 237
+Amiga                                         19
+Amiga CD32                                    56
+Amstrad CPC                                   60
+Amstrad PCW                                  136
+Android                                       91
+...
 ```
+
+Next, get the games based on that platform ID.
+
+```
+mobydump.py -g 35
+```
+
+See [command line flags](#commmand-line-flags) for all the options you can set when
+downloading the games for a platform.
+
+### Command line flags
 
 The following flags are available to use.
 
