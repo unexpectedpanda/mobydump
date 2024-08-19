@@ -1,7 +1,7 @@
 # MobyDump
 
 MobyDump downloads data from the MobyGames API for a specific platform, and outputs it to
-a delimiter-separated value file or JSON.
+a delimiter-separated value file or JSON. Specifically built for the [Exo projects](https://github.com/exoscoriae).
 
 It auto-resumes the download if the process is interrupted by the user, or by select HTTP
 error codes.
