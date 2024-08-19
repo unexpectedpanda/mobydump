@@ -6,7 +6,9 @@ import requests
 from modules.utils import eprint
 
 
-def api_request(url: str, headers: dict[str:str], message: str = '', timeout: int = 0) -> requests.models.Response:
+def api_request(
+    url: str, headers: dict[str:str], message: str = '', timeout: int = 0
+) -> requests.models.Response:
     """
     Requests data from the MobyGames API.
 
@@ -36,31 +38,61 @@ def api_request(url: str, headers: dict[str:str], message: str = '', timeout: in
     except requests.ConnectionError:
         # It'd be nice to retry here instead, however the script loses context in some
         # way. Needs more research to fix.
-        eprint('Can\'t connect to MobyGames API. Maybe the internet has dropped?', level='error')
-        sys.exit(1)
+        eprint(
+            'Can\'t connect to MobyGames API. Maybe the internet has dropped? Restart MobyDump to resume.',
+            level='error',
+            indent=False,
+        )
+        request_retry(url, headers, message, timeout, 'MOTHERFUCKING INTERNET')
+        # sys.exit(1)
     except requests.exceptions.HTTPError as err:
         if err.response.status_code == 401:
-            eprint('Unauthorized access. Have you provided a MobyGames API key?', level='error')
+            eprint(
+                'Unauthorized access. Have you provided a MobyGames API key?',
+                level='error',
+                indent=False,
+            )
             eprint(f'\n{err}')
             sys.exit(1)
         if err.response.status_code == 422:
-            eprint('The parameter sent was the right type, but was invalid.', level='error')
+            eprint(
+                'The parameter sent was the right type, but was invalid.',
+                level='error',
+                indent=False,
+            )
             eprint(f'\n{err}')
             sys.exit(1)
         if err.response.status_code == 429:
             request_retry(
-                url, headers, message, timeout, 'Rate limited: too many requests in too short a time.'
+                url,
+                headers,
+                message,
+                timeout,
+                'Rate limited: too many requests in too short a time.',
             )
         if err.response.status_code == 500:
             # Sometimes MobyGames throws a 500, even though it shouldn't. Attempt a retry
             # if this happens.
             request_retry(
-                url, headers, message, timeout, 'Received a 500 error, assuming it\'s ephemeral.'
+                url,
+                headers,
+                message,
+                timeout,
+                'Received a 500 internal server error, assuming it\'s ephemeral.',
+            )
+        if err.response.status_code == 502:
+            # Sometimes MobyGames throws a 502. Attempt a retry if this happens.
+            request_retry(
+                url,
+                headers,
+                message,
+                timeout,
+                'Received a 502: bad gateway error, assuming it\'s ephemeral.',
             )
         if err.response.status_code == 504:
             request_retry(url, headers, message, timeout, 'Gateway timeout for URL.')
         else:
-            eprint(f'\n{err}')
+            eprint(f'\n{err}', level='error', indent=False)
             sys.exit(1)
 
 
@@ -72,6 +104,8 @@ def request_retry(
 
     Args:
         url (str): The URL to query, including query strings.
+
+        headers (str): The headers for the request.
 
         message (str): The message to print to screen.
 

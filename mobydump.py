@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 """
-Downloads data from MobyGames and outputs it to a delimiter-separated value file or JSON.
+MobyDump downloads data from the MobyGames API for a specific platform, and outputs it to
+a delimiter-separated value file or JSON.
 
 https://github.com/unexpectedpanda/mobydump
 """
@@ -65,10 +66,7 @@ if os.getenv('MOBY_API'):
         user_agent = str(args.useragent)
 
     # Set the request headers
-    headers: dict[str, str] = {
-        'Accept': 'application/json',
-        'User-Agent': user_agent
-    }
+    headers: dict[str, str] = {'Accept': 'application/json', 'User-Agent': user_agent}
 
     # ====================================================================================
     # Get platforms if requested by the user
@@ -82,7 +80,9 @@ if os.getenv('MOBY_API'):
             dict[str, list[dict[str, str | int]]]: The contents of the response, in JSON form.
         """
         platforms: dict[str, list[dict[str, str | int]]] = api_request(
-            f'https://api.mobygames.com/v1/platforms?api_key={api_key}', headers, message='• Retrieving platforms...'
+            f'https://api.mobygames.com/v1/platforms?api_key={api_key}',
+            headers,
+            message='• Retrieving platforms...',
         ).json()
 
         eprint('• Retrieving platforms... done.', overwrite=True)
@@ -276,7 +276,8 @@ if os.getenv('MOBY_API'):
                 # Make the request for the platform's games
                 games: dict[str, Any] = api_request(
                     f'https://api.mobygames.com/v1/games?api_key={api_key}&platform={platform_id}&offset={offset}&limit={offset_increment}',
-                    headers, message=f'• Requesting titles {offset}-{offset+offset_increment}...',
+                    headers,
+                    message=f'• Requesting titles {offset}-{offset+offset_increment}...',
                 ).json()
 
                 # Add games to the cache, and then process them
