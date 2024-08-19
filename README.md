@@ -20,7 +20,7 @@ steps:
     pip install numpy pandas requests
     ```
 
-No matter which version you use, you need to set up your MobyHames API key. To do so,
+No matter which version you use, you need to set up your MobyGames API key. To do so,
 complete the following steps:
 
 1.  Create a file named `.env` in the same folder MobyDump is in.
