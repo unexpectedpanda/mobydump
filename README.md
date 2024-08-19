@@ -9,7 +9,8 @@ HTTP error codes are received.
 ## Before you begin
 
 If you're not using the [compiled release](https://github.com/unexpectedpanda/mobydump/releases),
-you need to set up your development environment. To do so, complete the following steps:
+then you need to set up your development environment. To do so, complete the following
+steps:
 
 1.  [Install Python 3.10 or higher](https://www.python.org/).
 
