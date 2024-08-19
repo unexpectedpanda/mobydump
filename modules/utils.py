@@ -1,7 +1,58 @@
 import argparse
+import os
+import platform
+import re
 import sys
 import textwrap
 from typing import Any
+
+def enable_vt_mode() -> Any:
+    """
+    Turns on VT-100 emulation mode for Windows, allowing things like colors.
+
+    From https://bugs.python.org/issue30075
+    """
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    kernel32: ctypes.WinDLL = ctypes.WinDLL('kernel32', use_last_error=True)
+
+    ERROR_INVALID_PARAMETER: int = 0x0057
+    ENABLE_VIRTUAL_TERMINAL_PROCESSING: int = 0x0004
+
+    def _check_bool(result: int, func: Any, args: tuple[int, Any]) -> tuple[int, Any]:
+        if not result:
+            raise ctypes.WinError(ctypes.get_last_error())
+        return args
+
+    LPDWORD = ctypes.POINTER(wintypes.DWORD)
+    setattr(kernel32.GetConsoleMode, 'errcheck', _check_bool)
+    setattr(kernel32.GetConsoleMode, 'argtypes', (wintypes.HANDLE, LPDWORD))
+    setattr(kernel32.GetConsoleMode, 'errcheck', _check_bool)
+    setattr(kernel32.SetConsoleMode, 'argtypes', (wintypes.HANDLE, wintypes.DWORD))
+
+    def set_conout_mode(new_mode: int, mask: int = 0xFFFFFFFF) -> int:
+        # Don't assume STDOUT is a console, open CONOUT$ instead
+        fdout: int = os.open('CONOUT$', os.O_RDWR)
+        try:
+            hout: int = msvcrt.get_osfhandle(fdout)
+            old_mode: ctypes.c_ulong = wintypes.DWORD()
+            kernel32.GetConsoleMode(hout, ctypes.byref(old_mode))
+            mode: int = (new_mode & mask) | (old_mode.value & ~mask)
+            kernel32.SetConsoleMode(hout, mode)
+            return old_mode.value
+        finally:
+            os.close(fdout)
+
+    mode = mask = ENABLE_VIRTUAL_TERMINAL_PROCESSING
+
+    try:
+        return set_conout_mode(mode, mask)
+    except OSError as e:
+        if e.winerror == ERROR_INVALID_PARAMETER:
+            raise NotImplementedError
+        raise
 
 
 def eprint(
@@ -76,6 +127,21 @@ def eprint(
             f'{empty_lines}{Font.d}Press enter to continue{Font.end}', file=sys.stderr
         )
         input()
+
+
+def old_windows() -> bool:
+    """Figures out if MobyDump is running on a version of Windows earlier than Windows 10 or Windows Server 2019."""
+    windows_version: str = platform.release()
+
+    if sys.platform.startswith('win'):
+        # Catch Windows Server
+        if re.search('[A-Za-z]', windows_version):
+            if int(re.sub('[A-Za-z]', '', windows_version)) < 2019:
+                return True
+        # Catch consumer versions of Windows
+        elif float(windows_version) < 10:
+            return True
+    return False
 
 
 class Font:

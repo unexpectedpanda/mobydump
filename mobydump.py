@@ -24,7 +24,13 @@ import modules.constants as const
 from modules.api_requests import api_request
 from modules.data_sanitize import reorder_columns, sanitize_columns, sanitize_mobygames_response
 from modules.input import user_input
-from modules.utils import Font, eprint
+from modules.utils import Font, eprint, old_windows
+
+# Enable VT100 escape sequence for Windows 10+
+if not old_windows() and sys.platform.startswith('win'):
+    from modules.utils import enable_vt_mode
+
+    enable_vt_mode()
 
 # Require at least Python 3.10.
 try:
