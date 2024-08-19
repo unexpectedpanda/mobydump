@@ -15,6 +15,18 @@ def main():
 
     print('\nBuilding MobyDump...')
 
+    # Delete folders that could cause issues
+    delete_folders: list[str] = [
+        'build//working/dist',
+        'build/working/modules',
+    ]
+
+    for folder in delete_folders:
+        try:
+            shutil.rmtree(pathlib.Path(folder))
+        except:
+            pass
+
     # Create folders needed to build MobyDump
     create_folders: list[str] = [
         'build/working/dist',
@@ -24,6 +36,15 @@ def main():
 
     for folder in create_folders:
         pathlib.Path(folder).mkdir(parents=True, exist_ok=True)
+
+    # Prevent PyInstaller from copying the MobyGames API key environment variable
+    mobykey: str = ''
+
+    with open (pathlib.Path('.env'), 'r', encoding='utf-8') as env_file:
+        mobykey = env_file.read()
+
+    with open (pathlib.Path('.env'), 'w', encoding='utf-8') as env_file:
+        env_file.write('')
 
     # Copy required files for building the Windows binary
     destination_path: str = 'build/working'
@@ -56,6 +77,10 @@ def main():
             pass
 
     zf.close()
+
+    # Restore the .env file
+    with open (pathlib.Path('.env'), 'w', encoding='utf-8') as env_file:
+        env_file.write(mobykey)
 
     print('\nBuild complete.\n')
 
