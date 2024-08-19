@@ -2,6 +2,7 @@ import argparse
 import sys
 from typing import Any
 
+import modules.constants as const
 from modules.utils import Font, SmartFormatter, eprint
 
 
@@ -100,6 +101,16 @@ def user_input() -> argparse.Namespace:
         '\n\n',
     )
 
+    game_options.add_argument(
+        '-u',
+        '--useragent',
+        metavar='"<USER_AGENT>"',
+        type=str,
+        help=f'R|Change the user agent MobyDump supplies when making requests.'
+        f'\nDefaults to {Font.b}MobyDump/{const.__version__}; https://www.retro-exo.com/{Font.be}.'
+        '\n\n',
+    )
+
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)
@@ -130,6 +141,14 @@ def user_input() -> argparse.Namespace:
 
     if args.ratelimit and not args.games:
         eprint('Must specify --games with --ratelimit. Exiting...', level='error')
+        sys.exit(1)
+
+    if args.raw and not args.games:
+        eprint('Must specify --games with --raw. Exiting...', level='error')
+        sys.exit(1)
+
+    if args.useragent and not (args.games or args.platforms):
+        eprint('Must specify --games or --platforms with --useragent. Exiting...', level='error')
         sys.exit(1)
 
     return args

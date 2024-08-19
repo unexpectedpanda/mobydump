@@ -177,7 +177,8 @@ def sanitize_mobygames_response(game: dict[str, Any]) -> dict:
     if 'sample_cover' in game:
         if game['sample_cover']:
             if 'platforms' in game['sample_cover']:
-                game['sample_cover']['platforms'] = game['sample_cover']['platforms'][0]
+                if game['sample_cover']['platforms']:
+                    game['sample_cover']['platforms'] = game['sample_cover']['platforms'][0]
 
             for key in game['sample_cover']:
                 game[f'Sample cover {str(key).replace("_", " ")}'] = game['sample_cover'][key]

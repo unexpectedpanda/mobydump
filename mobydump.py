@@ -20,7 +20,7 @@ import pandas as pd
 from dotenv import load_dotenv  # type: ignore
 
 import modules.constants as const
-from modules.api_requests import mobygames_request
+from modules.api_requests import api_request
 from modules.data_sanitize import reorder_columns, sanitize_columns, sanitize_mobygames_response
 from modules.input import user_input
 from modules.utils import Font, eprint
@@ -58,6 +58,18 @@ if os.getenv('MOBY_API'):
     # Get the API key
     api_key: str = html.escape(str(os.getenv('MOBY_API')))
 
+    # Set the user agent
+    user_agent: str = f'MobyDump/{const.__version__}; https://www.retro-exo.com/'
+
+    if args.useragent:
+        user_agent = str(args.useragent)
+
+    # Set the request headers
+    headers: dict[str, str] = {
+        'Accept': 'application/json',
+        'User-Agent': user_agent
+    }
+
     # ====================================================================================
     # Get platforms if requested by the user
     # ====================================================================================
@@ -69,8 +81,8 @@ if os.getenv('MOBY_API'):
         Returns:
             dict[str, list[dict[str, str | int]]]: The contents of the response, in JSON form.
         """
-        platforms: dict[str, list[dict[str, str | int]]] = mobygames_request(
-            f'https://api.mobygames.com/v1/platforms?api_key={api_key}', '• Retrieving platforms...'
+        platforms: dict[str, list[dict[str, str | int]]] = api_request(
+            f'https://api.mobygames.com/v1/platforms?api_key={api_key}', headers, message='• Retrieving platforms...'
         ).json()
 
         eprint('• Retrieving platforms... done.', overwrite=True)
@@ -256,15 +268,15 @@ if os.getenv('MOBY_API'):
                     platform_contents_cache = {'finished': False}
 
                 # Repopulate the games list if resuming
-                if not platform_contents_cache['finished']:
+                if not platform_contents_cache['finished'] and not games_list:
                     for key, values in platform_contents_cache.items():
                         if key != 'finished':
                             add_games(values)
 
                 # Make the request for the platform's games
-                games: dict[str, Any] = mobygames_request(
+                games: dict[str, Any] = api_request(
                     f'https://api.mobygames.com/v1/games?api_key={api_key}&platform={platform_id}&offset={offset}&limit={offset_increment}',
-                    f'• Requesting titles {offset}-{offset+offset_increment}...',
+                    headers, message=f'• Requesting titles {offset}-{offset+offset_increment}...',
                 ).json()
 
                 # Add games to the cache, and then process them
@@ -317,7 +329,7 @@ if os.getenv('MOBY_API'):
             if end_loop:
                 break
 
-        # Sort the game list by title
+        # Sort the game list by title, dedupe if necessary
         games_list = sorted(games_list, key=lambda d: d['title'])
 
         # Write the output file
@@ -332,11 +344,11 @@ if os.getenv('MOBY_API'):
             if not args.raw:
                 df = reorder_columns(df)
 
-            # Write to delimited file
-            df.to_csv(output_file, index=False, encoding='utf-8', sep=delimiter)
+            # Write to delimited file, using a BOM so Microsoft apps interpret the encoding correctly
+            df.to_csv(output_file, index=False, encoding='utf-8-sig', sep=delimiter)
 
         elif output_file_type == 2:
-            with open(output_file, 'w', encoding='utf-8') as file:
+            with open(output_file, 'w', encoding='utf-8-sig') as file:
                 file.write(json.dumps(games_list, indent=2))
 
         eprint(

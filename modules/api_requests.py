@@ -6,12 +6,14 @@ import requests
 from modules.utils import eprint
 
 
-def mobygames_request(url: str, message: str = '', timeout: int = 0) -> requests.models.Response:
+def api_request(url: str, headers: dict[str:str], message: str = '', timeout: int = 0) -> requests.models.Response:
     """
     Requests data from the MobyGames API.
 
     Args:
         url (str): The URL to query, including query strings.
+
+        headers (str): The headers for the request.
 
         message (str): The message to print to screen.
 
@@ -24,13 +26,18 @@ def mobygames_request(url: str, message: str = '', timeout: int = 0) -> requests
     try:
         eprint(message)
 
-        response = requests.get(url, headers={'Accept': 'application/json'})
+        response = requests.get(url, headers=headers)
 
         response.raise_for_status()
 
         return response
     except requests.exceptions.Timeout:
-        request_retry(url, message, timeout, 'Timeout.')
+        request_retry(url, headers, message, timeout, 'Timeout.')
+    except requests.ConnectionError:
+        # It'd be nice to retry here instead, however the script loses context in some
+        # way. Needs more research to fix.
+        eprint('Can\'t connect to MobyGames API. Maybe the internet has dropped?', level='error')
+        sys.exit(1)
     except requests.exceptions.HTTPError as err:
         if err.response.status_code == 401:
             eprint('Unauthorized access. Have you provided a MobyGames API key?', level='error')
@@ -42,17 +49,23 @@ def mobygames_request(url: str, message: str = '', timeout: int = 0) -> requests
             sys.exit(1)
         if err.response.status_code == 429:
             request_retry(
-                url, message, timeout, 'Rate limited: too many requests in too short a time.'
+                url, headers, message, timeout, 'Rate limited: too many requests in too short a time.'
+            )
+        if err.response.status_code == 500:
+            # Sometimes MobyGames throws a 500, even though it shouldn't. Attempt a retry
+            # if this happens.
+            request_retry(
+                url, headers, message, timeout, 'Received a 500 error, assuming it\'s ephemeral.'
             )
         if err.response.status_code == 504:
-            request_retry(url, message, timeout, 'Gateway timeout for URL.')
+            request_retry(url, headers, message, timeout, 'Gateway timeout for URL.')
         else:
             eprint(f'\n{err}')
             sys.exit(1)
 
 
 def request_retry(
-    url: str, message: str, timeout: int, error_message: str
+    url: str, headers: dict[str, str], message: str, timeout: int, error_message: str
 ) -> requests.models.Response:
     """
     Retries a request if a timeout has occurred.
@@ -92,5 +105,5 @@ def request_retry(
             sleep(1)
 
     timeout += 1
-    response = mobygames_request(url, message, timeout)
+    response = api_request(url, headers, message, timeout)
     return response
