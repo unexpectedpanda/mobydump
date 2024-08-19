@@ -171,7 +171,10 @@ Flags that can be used with `--games`:
   stick to the advertised limits and only run one session of MobyDump, or your client or
   API key could be banned by MobyGames for abuse.
 
-## Importing into Access 2013&ndash;2021
+## Importing into Microsoft Access 2013&ndash;2021
+
+Assuming you exported to a delimiter-separated value file, here's how you open it in
+Microsoft Access:
 
 1.  Open the file that MobyDump created.
 
