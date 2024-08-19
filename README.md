@@ -184,8 +184,8 @@ Microsoft Access:
 
 1.  Choose the delimiter.
 
-1.  Click **First row contains field names**.
-
 1.  Change **Text Qualifier** to `"`.
+
+1.  Click **First row contains field names**.
 
 1.  Click **Finish**.
