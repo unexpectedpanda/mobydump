@@ -141,3 +141,18 @@ def request_retry(
     timeout += 1
     response = api_request(url, headers, message, timeout)
     return response
+
+
+def request_wait(rate_limit: int) -> None:
+    """
+    A countdown timer that limits the rate of requests.
+
+    Args:
+        rate_limit (int): How many seconds to wait between requests.
+    """
+    for i in range(rate_limit):
+        eprint(f'• Waiting {rate_limit-i} seconds until next request...', overwrite=True)
+        sleep(1)
+
+    # Delete the previous line printed to screen
+    eprint('\033M\033[2K\033M')

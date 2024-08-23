@@ -21,7 +21,7 @@ steps:
     pip install numpy pandas requests
     ```
 
-### Set up your API key
+### Set up your API key and rate limit
 
 No matter which version of MobyDump you use, you need to set up your MobyGames API key. To
 do so, complete the following steps:
@@ -34,6 +34,18 @@ do so, complete the following steps:
     ```none
     MOBY_API="<MOBYGAMES_API_KEY>"
     ```
+
+1.  You can also set the rate limit in this file, in seconds per request, instead of
+    passing a command line argument:
+
+    ```none
+    MOBY_RATE=10
+    ```
+
+    Valid values are `10` for the free API key, or `5` for the MobyPro API key.
+
+    Use lower numbers at your own risk. Unless you have an agreement with MobyGames, lower
+    numbers than are suitable for your API key could get your client or API key banned.
 
 ## Using MobyDump
 
@@ -187,5 +199,9 @@ Microsoft Access:
 1.  Change **Text Qualifier** to `"`.
 
 1.  Click **First row contains field names**.
+
+1.  Click **Advanced**.
+
+1.  Change the **First release date** field data type to **Short Text**.
 
 1.  Click **Finish**.

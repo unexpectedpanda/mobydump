@@ -81,7 +81,7 @@ def user_input() -> argparse.Namespace:
         '-r',
         '--ratelimit',
         metavar='<SECONDS_PER_REQUEST>',
-        type=str,
+        type=int,
         help=f'R|How many seconds to wait between requests. When not specified,'
         f'\ndefaults to {Font.b}10{Font.be}. Choose a number from the following list:'
         '\n\n10 - MobyGames non-commercial free API key'

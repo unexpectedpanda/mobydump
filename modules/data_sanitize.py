@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import re
+import warnings
+from typing import Any
 
 import numpy as np
+import pandas as pd
+from natsort import natsorted
 
-if TYPE_CHECKING:
-    import pandas as pd
+# Ignore Pandas performance warnings for inserts
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
 
 def reorder_columns(df: pd.core.frame.DataFrame) -> pd.core.frame.DataFrame:
@@ -42,14 +46,11 @@ def reorder_columns(df: pd.core.frame.DataFrame) -> pd.core.frame.DataFrame:
     column_number: int = 0
 
     column_number = reorder(column_number, 'Title', 'title')
-    column_number = reorder(column_number, 'Alternative titles', 'alternate_titles')
     column_number = reorder(column_number, 'Game ID', 'game_id')
     column_number = reorder(column_number, 'MobyGames URL', 'moby_url')
-    column_number = reorder(column_number, 'Platforms and release dates', 'platforms')
+    column_number = reorder(column_number, 'First release date', 'first_release_date')
     column_number = reorder(column_number, 'Description', 'description')
     column_number = reorder(column_number, 'Official URL', 'official_url')
-    column_number = reorder(column_number, 'MobyGames score', 'moby_score')
-    column_number = reorder(column_number, 'Number of voters', 'num_votes')
     column_number = reorder(column_number, 'Genres (Basic)', 'genres (Basic Genres)')
     column_number = reorder(column_number, 'Genres (Perspective)', 'genres (Perspective)')
     column_number = reorder(column_number, 'Genres (Setting)', 'genres (Setting)')
@@ -66,35 +67,20 @@ def reorder_columns(df: pd.core.frame.DataFrame) -> pd.core.frame.DataFrame:
     for column in genre_columns:
         column_number = reorder(column_number, column.replace('genres', 'Genres'), column)
 
-    # Add sample cover details
-    column_number = reorder(column_number, 'Sample cover image', 'Sample cover image')
-    column_number = reorder(column_number, 'Sample cover width', 'Sample cover width')
-    column_number = reorder(column_number, 'Sample cover height', 'Sample cover height')
-    column_number = reorder(column_number, 'Sample cover platforms', 'Sample cover platforms')
-    column_number = reorder(
-        column_number, 'Sample cover thumbnail image', 'Sample cover thumbnail image'
-    )
-    column_number = reorder(column_number, 'Sample screenshots', 'Sample screenshots')
-
-    # Add screenshots
-    screenshot_columns: list[str] = []
+    # Add the release columns
+    release_columns: list[str] = []
 
     for column in df.columns:
-        if column.startswith('Screenshot'):
-            screenshot_columns.append(column)
+        if column.startswith('Release '):
+            release_columns.append(column)
 
-    highest_screenshot_number: int = max(
-        [int(''.join(filter(str.isdigit, x))) for x in screenshot_columns]
-    )
+    release_columns = natsorted(release_columns)
 
-    for i in range(1, highest_screenshot_number + 1):
-        column_number = reorder(column_number, f'Screenshot {i} image', f'Screenshot {i} image')
-        column_number = reorder(column_number, f'Screenshot {i} width', f'Screenshot {i} width')
-        column_number = reorder(column_number, f'Screenshot {i} height', f'Screenshot {i} height')
-        column_number = reorder(column_number, f'Screenshot {i} caption', f'Screenshot {i} caption')
-        column_number = reorder(
-            column_number, f'Screenshot {i} thumbnail image', f'Screenshot {i} thumbnail_image'
-        )
+    for column in release_columns:
+        column_number = reorder(column_number, column.title().replace('_', ' '), column)
+
+    # Sanitize column names
+    df.rename(columns=lambda x: x.replace('/', '-'), inplace=True)
 
     return df
 
@@ -128,69 +114,100 @@ def sanitize_columns(df: pd.core.frame.DataFrame) -> pd.core.frame.DataFrame:
     return df
 
 
-def sanitize_mobygames_response(game: dict[str, Any]) -> dict:
+def restructure_mobygames_response(
+    game: dict[str, Any], stage: int, key: str = '', values: Any = {}
+) -> dict:
     """
     Extracts and sanitizes data from a MobyGames API response so it's more suitable for a database.
 
     Args:
         game (dict[str, Any]): A dictionary containing game details from the MobyGames API.
 
+        platform_id (int): The MobyGames platform ID.
+
+        stage (int): What stage is being sanitized.
+
+        key (str): Used only in stage 2.
+
+        values (Any): Used only in stage 2.
+
     Returns:
         dict: A dictionary containing sanitized game details.
     """
-    # Format alternate titles field
-    if 'alternate_titles' in game:
-        alternate_titles: list[str] = []
+    if stage == 1:
+        # Format alternate titles fields
+        if 'alternate_titles' in game:
 
-        for alternate_title in game['alternate_titles']:
-            alternate_titles.append(f'{alternate_title["description"]}: {alternate_title["title"]}')
-
-        if alternate_titles:
-            game['alternate_titles'] = ', '.join(alternate_titles)
-        else:
-            game['alternate_titles'] = ''
-
-    # Format genre field
-    if 'genres' in game:
-        if game['genres']:
-            for genre in game['genres']:
-                game[f'genres ({genre["genre_category"]})'] = genre["genre_name"]
-
-        del game['genres']
-
-    # Format platforms field
-    if 'platforms' in game:
-        if game['platforms']:
-            game_platforms: list[str] = []
-
-            for platforms in game['platforms']:
-                game_platforms.append(
-                    f'{platforms["platform_name"]} ({platforms["first_release_date"]})'
+            for alternate_title in game['alternate_titles']:
+                # Shorten the field names, as Access limits the line-length when importing
+                # files to 65534 characters
+                field_name: str = (
+                    f'Alt title ({re.sub(' title$', '', alternate_title['description'])})'
                 )
+                field_name = field_name.replace('Alternate title', 'Alt title')
 
-            if platforms:
-                game['platforms'] = ', '.join(game_platforms)
-            else:
-                game['platforms'] = ''
+                game[field_name] = alternate_title['title']
 
-    # Format images
-    if 'sample_cover' in game:
-        if game['sample_cover']:
-            if 'platforms' in game['sample_cover']:
-                if game['sample_cover']['platforms']:
-                    game['sample_cover']['platforms'] = game['sample_cover']['platforms'][0]
+            del game['alternate_titles']
 
-            for key in game['sample_cover']:
-                game[f'Sample cover {str(key).replace("_", " ")}'] = game['sample_cover'][key]
+        # Format genre field
+        if 'genres' in game:
+            if game['genres']:
+                for genre in game['genres']:
+                    game[f'genres ({genre["genre_category"]})'] = genre["genre_name"]
 
+            del game['genres']
+
+        # Drop unneeded data
+        del game['moby_score']
+        del game['num_votes']
+        del game['platforms']
         del game['sample_cover']
+        del game['sample_screenshots']
 
-    if 'sample_screenshots' in game:
-        if game['sample_screenshots']:
-            for i, screenshot in enumerate(game['sample_screenshots'], start=1):
-                for key, value in screenshot.items():
-                    game[f'Screenshot {i} {key}'] = value
+    if stage == 2:
+        # Bring nested data up to the column level and format fields accordingly
+        if key == 'attributes':
+            attribute_counter: list[Any] = []
+            for attributes in values:
+                attribute_counter.append(attributes['attribute_category_name'])
 
-        del [game['sample_screenshots']]
+                if 'attribute_category_name' in attributes and 'attribute_name' in attributes:
+                    game[
+                        f'{attributes["attribute_category_name"]} {attribute_counter.count(attributes['attribute_category_name'])}'
+                    ] = attributes['attribute_name']
+        elif key == 'patches':
+            for i, patch in enumerate(values):
+                if 'description' in patch:
+                    game[f'Patch {i}: Description'] = patch['description']
+                if 'release_date' in patch:
+                    game[f'Patch {i}: Release date'] = patch['release_date']
+        elif key == 'ratings':
+            for rating in values:
+                game[rating['rating_system_name']] = rating['rating_name']
+        elif key == 'releases':
+            for i, releases in enumerate(values, start=1):
+                for release in releases:
+                    if release == 'companies':
+                        for company in releases[release]:
+                            if 'company_name' in company and 'role' in company:
+                                game[f'Release {i}: {company["role"]}'] = company['company_name']
+                    elif release == 'countries':
+                        for j, country in enumerate(releases[release], start=1):
+                            game[f'Release {i}: Country {j}'] = country
+                    elif release == 'product_codes':
+                        for product_code in releases[release]:
+                            for product_code_entry in product_code:
+                                game[
+                                    f'Release {i}: {product_code_entry}'.title()
+                                    .replace('_', '')
+                                    .replace(' id', 'ID')
+                                ] = product_code[product_code_entry]
+                    elif release == 'release_date':
+                        game[f'Release {i}: Release date'] = releases[release]
+                    else:
+                        game[f'Release {i}: {release}'] = releases[release]
+        else:
+            game[key] = values
 
     return game

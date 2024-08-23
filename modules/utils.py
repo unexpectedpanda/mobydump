@@ -6,6 +6,7 @@ import sys
 import textwrap
 from typing import Any
 
+
 def enable_vt_mode() -> Any:
     """
     Turns on VT-100 emulation mode for Windows, allowing things like colors.
