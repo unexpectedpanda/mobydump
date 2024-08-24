@@ -207,7 +207,7 @@ def main() -> None:
             if completion_status['stage_1_finished'] and completion_status['stage_2_finished']:
                 while resume != 'r' and resume != 'w':
                     eprint(
-                        f'\nThe {platform_name} platform has already been downloaded. Do you want to redownload (r), or write the file from cache (w)?',
+                        f'\nGames from {platform_name} have already been downloaded. Do you want to redownload (r), or write new output files from cache (w)?',
                         level='warning',
                         indent=False,
                     )
@@ -270,6 +270,11 @@ def main() -> None:
                 )
 
             # Enrich the existing game list with individual game details
+            eprint(
+                f'• Merging game data...',
+                indent=False,
+            )
+
             for game in games_list:
                 if pathlib.Path(
                     f'cache/{platform_id}/games-platform/{game['game_id']}.json'
@@ -292,9 +297,14 @@ def main() -> None:
                                 else:
                                     game[key] = values
 
+            eprint(
+                f'• Merging game data... done.',
+                indent=False, overwrite=True
+            )
+
             # Write the output file
             eprint(
-                f'\n{Font.success}Finished requesting all titles. Writing data to {Font.b}{output_file}{Font.be}...{Font.end}',
+                f'\n{Font.success}Finished processing titles. Writing data to {Font.b}{output_file}{Font.be}...{Font.end}',
                 indent=False,
             )
 
@@ -317,7 +327,7 @@ def main() -> None:
                     file.write(json.dumps(games_list, indent=2))
 
             eprint(
-                f'{Font.success}Finished requesting all titles. Writing data to {Font.b}{output_file}{Font.be}... done.{Font.end}',
+                f'{Font.success}Finished processing titles. Writing data to {Font.b}{output_file}{Font.be}... done.{Font.end}',
                 overwrite=True,
                 wrap=False,
             )
