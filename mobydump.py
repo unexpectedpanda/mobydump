@@ -21,7 +21,7 @@ from dotenv import load_dotenv  # type: ignore
 
 import modules.constants as const
 from modules.api_requests import api_request, request_wait
-from modules.data_sanitize import reorder_columns, sanitize_columns, restructure_mobygames_response
+from modules.data_sanitize import reorder_columns, restructure_mobygames_response, sanitize_columns
 from modules.input import user_input
 from modules.utils import Font, eprint, old_windows
 
@@ -195,9 +195,56 @@ def main() -> None:
                             f'the {Font.b}{cached_platform["platform_name"]}{Font.be} platform'
                         )
 
-            # Retrieve the games for the specified platform
+            # Set up the cache folders
+            pathlib.Path(f'cache/{platform_id}/games-platform').mkdir(parents=True, exist_ok=True)
+
+            # Read the requests status file if it exists
+            status: dict[str, bool] = {'stage_1_finished': False, 'stage_2_finished': False}
+
+            if pathlib.Path(f'cache/{platform_id}/status.json').is_file():
+                with open(
+                    pathlib.Path(f'cache/{platform_id}/status.json'), encoding='utf-8'
+                ) as status_cache:
+                    try:
+                        status = json.load(status_cache)
+                    except Exception:
+                        pass
+
+            # Read the game cache file if it exists
+            game_cache: dict[str, Any] = {}
+
+            if pathlib.Path(f'cache/{platform_id}/games.json').is_file():
+                with open(
+                    pathlib.Path(f'cache/{platform_id}/games.json'), encoding='utf-8'
+                ) as platform_request_cache:
+                    try:
+                        game_cache = json.load(platform_request_cache)
+                    except Exception:
+                        pass
+
+            # If everything has already been downloaded, ask the user if they want to redownload or write out from
+            # cache.
+            redownload: str = ''
+
+            if status['stage_1_finished'] and status['stage_2_finished']:
+                while redownload != 'r' and redownload != 'w':
+                    eprint(
+                        f'\nThe {platform_name} platform has already been downloaded. Do you want to redownload (r), or write the file from cache (w)?',
+                        level='warning',
+                        indent=False,
+                    )
+                    redownload = input('\n> ')
+                    eprint('')
+
+
+            # Set up the games list
             games_list: list[dict[str, Any]] = []
 
+            # ============================================================================
+            # Stage 1: Download platform level details
+            # ============================================================================
+
+            # Retrieve the games for the specified platform
             def add_games(games_dict: dict[str, Any]) -> None:
                 """
                 Reworks game data to be suitable for databases, then adds the game to a list.
@@ -213,39 +260,19 @@ def main() -> None:
 
                         games_list.append(game_value)
 
-            # Read the game cache file if it exists
-            game_cache: dict[str, Any] = {'stage_1_finished': False, 'stage_2_finished': False}
-
-            if pathlib.Path(f'cache/{platform_id}/games.json').is_file():
-                with open(
-                    pathlib.Path(f'cache/{platform_id}/games.json'), encoding='utf-8'
-                ) as platform_request_cache:
-                    try:
-                        game_cache = json.load(platform_request_cache)
-                    except Exception:
-                        pass
-            else:
-                pathlib.Path(f'cache/{platform_id}').mkdir(parents=True, exist_ok=True)
-
             eprint(f'{Font.b}{Font.u}Stage 1{Font.end}')
-            if not game_cache['stage_1_finished']:
-                eprint(
-                    'Getting titles, alternate titles, descriptions, URLs, and genres.\n',
-                    indent=False,
-                )
-                eprint(f'• Retrieving games from {platform_name}.')
-            else:
-                eprint(
-                    f'Games already retrieved for {platform_name}, downloading individual game details instead.',
-                    indent=False,
-                )
+            eprint(
+                'Getting titles, alternate titles, descriptions, URLs, and genres.\n',
+                indent=False,
+            )
+            eprint(f'• Retrieving games from {platform_name}.')
 
             # Set the request offset
             offset: int = 0
             offset_increment: int = 100
 
             # Change the offset if we need to resume
-            if len(game_cache) > 2 and not game_cache['stage_1_finished']:
+            if game_cache and not status['stage_1_finished']:
                 # Get the last key in the cache, and set the offset appropriately
                 offset = int(list(game_cache)[-1]) + offset_increment
 
@@ -261,24 +288,10 @@ def main() -> None:
                 else:
                     i += 1
 
-                # If there's a cache file and we need to resume, do so. Otherwise, ask the user if they want to
-                # redownload or write out from cache.
-                redownload: str = ''
-
-                if game_cache['stage_1_finished'] and game_cache['stage_2_finished']:
-                    while redownload != 'r' and redownload != 'w':
-                        eprint(
-                            f'\nThe {platform_name} platform has already been downloaded. Do you want to redownload (r), or write the file from cache (w)?',
-                            level='warning',
-                            indent=False,
-                        )
-                        redownload = input('\n> ')
-                        eprint('')
-
                 # User redownloads, or MobyDump auto-resumes because the request was previously marked as unfinished
                 end_loop: bool = False
 
-                if not game_cache['stage_1_finished'] or redownload == 'r':
+                if not status['stage_1_finished'] or redownload == 'r':
                     if redownload == 'r':
                         # Delete the cache file and empty out game_cache
                         pathlib.Path(f'cache/{platform_id}/games.json').unlink()
@@ -286,9 +299,8 @@ def main() -> None:
 
                     # Repopulate the games list if resuming
                     if not games_list:
-                        for key, values in game_cache.items():
-                            if key != 'stage_1_finished' and key != 'stage_2_finished':
-                                add_games(values)
+                        for values in game_cache.values():
+                            add_games(values)
 
                     # Make the request for the platform's games
                     games: dict[str, Any] = api_request(
@@ -316,11 +328,11 @@ def main() -> None:
                         )
 
                         if len(games['games']) < 100:
-                            game_cache['stage_1_finished'] = True
+                            status['stage_1_finished'] = True
                             end_loop = True
 
                     elif not games['games']:
-                        game_cache['stage_1_finished'] = True
+                        status['stage_1_finished'] = True
                         end_loop = True
                 else:
                     end_loop = True
@@ -329,15 +341,20 @@ def main() -> None:
                 if redownload == 'w':
                     eprint('')
                     end_loop = True
-                    for key, values in game_cache.items():
-                        if key != 'stage_1_finished' and key != 'stage_2_finished':
-                            add_games(values)
+                    for values in game_cache.values():
+                        add_games(values)
 
                 # Write the cache
                 with open(
                     pathlib.Path(f'cache/{platform_id}/games.json'), 'w', encoding='utf-8'
                 ) as platform_request_cache:
                     platform_request_cache.write(json.dumps(game_cache, indent=4))
+
+                # Write the status
+                with open(
+                    pathlib.Path(f'cache/{platform_id}/status.json'), 'w', encoding='utf-8'
+                ) as status_cache:
+                    status_cache.write(json.dumps(status, indent=4))
 
                 # End the loop if needed
                 if end_loop:
@@ -347,20 +364,24 @@ def main() -> None:
             games_list = sorted(games_list, key=lambda d: d['title'])
 
             # Now get the individual game details
-            eprint(
-                f'\n{Font.b}{Font.u}Stage 2{Font.end}\nGetting attributes, patches, ratings, and releases for each game.\n',
-                indent=False,
-            )
+            if status['stage_2_finished']:
+                eprint(
+                    f'\n{Font.b}{Font.u}Stage 2{Font.end}\nIndividual game details already retrieved for the {platform_name} platform.\n',
+                    indent=False,
+                )
+            else:
+                eprint(
+                    f'\n{Font.b}{Font.u}Stage 2{Font.end}\nGetting attributes, patches, ratings, and releases for each game.\n',
+                    indent=False,
+                )
 
-            if not game_cache['stage_2_finished']:
                 # Repopulate the games list if resuming
                 if not games_list:
-                    for key, values in game_cache.items():
-                        if key != 'stage_1_finished' and key != 'stage_2_finished':
-                            add_games(values)
+                    for values in game_cache.values():
+                        add_games(values)
 
                 # Only download game details that haven't been downloaded yet
-                for game in games_list:
+                for i, game in enumerate(games_list, start=1):
                     if (
                         not pathlib.Path(
                             f'cache/{platform_id}/games-platform/{game['game_id']}.json'
@@ -370,22 +391,32 @@ def main() -> None:
                         game_details: dict[str, Any] = api_request(
                             f'https://api.mobygames.com/v1/games/{game['game_id']}/platforms/{platform_id}?api_key={api_key}',
                             headers,
-                            message=f'• Requesting details for {game['title']} [#{game['game_id']}]...',
+                            message=f'• Requesting details for {game['title']} [ID: {game['game_id']}] ({i:,}/{len(games_list):,})...',
                         ).json()
 
                         with open(
-                            pathlib.Path(f'cache/{platform_id}/{game['game_id']}.json'),
+                            pathlib.Path(
+                                f'cache/{platform_id}/games-platform/{game['game_id']}.json'
+                            ),
                             'w',
                             encoding='utf-8',
                         ) as game_details_cache:
                             game_details_cache.write(json.dumps(game_details, indent=4))
 
                         eprint(
-                            f'• Requesting details for {game['title']} [#{game['game_id']}]... done.\n',
+                            f'• Requesting details for {game['title']} [ID: {game['game_id']}] ({i:,}/{len(games_list):,})... done.\n',
                             overwrite=True,
                         )
 
                         request_wait(rate_limit)
+
+                # Write the status
+                status['stage_2_finished'] = True
+
+                with open(
+                    pathlib.Path(f'cache/{platform_id}/status.json'), 'w', encoding='utf-8'
+                ) as status_cache:
+                    status_cache.write(json.dumps(status, indent=4))
 
                 # Enrich the existing game list
                 for game in games_list:
