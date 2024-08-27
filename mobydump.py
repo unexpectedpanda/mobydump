@@ -17,7 +17,7 @@ import pandas as pd
 from dotenv import load_dotenv  # type: ignore
 
 import modules.constants as const
-from modules.data_sanitize import reorder_columns, restructure_mobygames_response, sanitize_columns
+from modules.data_sanitize import reorder_columns, sanitize_columns, split_game_details
 from modules.get_mg_data import add_games, get_game_details, get_games, get_platforms
 from modules.input import user_input
 from modules.requests import request_wait
@@ -144,8 +144,8 @@ def main() -> None:
 
                 if len(encoded_delimiter) > 1:
                     eprint(
-                        f'Delimiter is more than one byte long in unicode ({delimiter} = {delimiter.encode('utf-8')!r}). '
-                        'Choose another character. Exiting...',
+                        f'Delimiter is more than one byte long in unicode ({delimiter} = '
+                        f'{delimiter.encode('utf-8')!r}). Choose another character. Exiting...',
                         level='error',
                         indent=0,
                     )
@@ -198,7 +198,7 @@ def main() -> None:
                         pass
 
             # Set up the games list for populating
-            games_list: list[dict[str, Any]] = []
+            games: list[dict[str, Any]] = []
 
             # If everything has already been downloaded, ask the user if they want to redownload or write out from
             # cache.
@@ -207,7 +207,8 @@ def main() -> None:
             if completion_status['stage_1_finished'] and completion_status['stage_2_finished']:
                 while resume != 'r' and resume != 'w':
                     eprint(
-                        f'\nGames from {platform_name} have already been downloaded. Do you want to redownload (r), or write new output files from cache (w)?',
+                        f'\nGames from {platform_name} have already been downloaded. Do you want to redownload (r), or '
+                        'write new output files from cache (w)?',
                         level='warning',
                         indent=False,
                     )
@@ -240,15 +241,15 @@ def main() -> None:
                 game_cache = {}
 
             # Repopulate the games list if resuming or writing out from cache
-            if not games_list:
+            if not games:
                 for values in game_cache.values():
-                    games_list = add_games(values, games_list, args)
+                    games = add_games(values, games, args)
 
-            # Stage 1: Download platform level details
+            # Stage 1: Download games for the platform
             if not completion_status['stage_1_finished']:
-                games_list = get_games(
+                games = get_games(
                     game_cache,
-                    games_list,
+                    games,
                     platform_id,
                     platform_name,
                     completion_status,
@@ -261,7 +262,7 @@ def main() -> None:
             # Stage 2: Download individual game details
             if not completion_status['stage_2_finished']:
                 get_game_details(
-                    games_list,
+                    games,
                     platform_id,
                     completion_status,
                     api_key,
@@ -269,13 +270,45 @@ def main() -> None:
                     headers,
                 )
 
-            # Enrich the existing game list with individual game details
+            # Organize the data for output
             eprint(
-                f'• Merging game data...',
+                '• Organizing game data...',
                 indent=False,
             )
 
-            for game in games_list:
+            # Organize stage 1 data for multiple table export
+            genres: list[dict[str, str]] = []
+            alternate_titles: list[dict[str, str]] = []
+            delete_keys: list[str] = []
+            unwanted_keys: list[str] = ['moby_score', 'num_votes', 'platforms', 'sample_cover', 'sample_screenshots']
+
+            for game in games:
+                for key in game.keys():
+                    if key.startswith('genres|'):
+                        genre: dict[str, str] = {}
+                        if 'game_id' not in genre:
+                            genre['game_id'] = game['game_id']
+
+                        genre[key.replace('genres|', '')] = game[key]
+                        genres.append(genre)
+                        delete_keys.append(key)
+                    elif key.startswith('alt titles|'):
+                        alternate_title: dict[str, str] = {}
+                        if 'game_id' not in genre:
+                            genre['game_id'] = game['game_id']
+
+                        alternate_title[key.replace('alt titles|', '')] = game[key]
+                        alternate_titles.append(alternate_title)
+                        delete_keys.append(key)
+
+            # Delete keys and unwanted data from the main game data
+            for game in games:
+                for delete_key in delete_keys + unwanted_keys:
+                    if delete_key in game:
+                        del(game[delete_key])
+
+            # Organize stage 2 data for multiple table export
+            for game in games:
                 if pathlib.Path(
                     f'cache/{platform_id}/games-platform/{game['game_id']}.json'
                 ).is_file():
@@ -283,34 +316,24 @@ def main() -> None:
                         pathlib.Path(f'cache/{platform_id}/games-platform/{game['game_id']}.json'),
                         encoding='utf-8',
                     ) as game_details_cache:
-                        loaded_game_details: dict[str, Any] = json.load(game_details_cache)
+                        game_details: dict[str, Any] = json.load(game_details_cache)
 
-                        # Set up keys to ignore
-                        ignore_keys: list[str] = ['platform_id', 'platform_name']
+                        # Rework data to be better suited to a database
+                        game_detail_tables = split_game_details(game['game_id'], game_details, args.raw)
 
-                        # Add the remaining keys to the game
-                        for key, values in loaded_game_details.items():
-                            if key not in ignore_keys:
-                                if not args.raw:
-                                    # Rework data to be better suited to a database
-                                    game = restructure_mobygames_response(game, 2, key, values)
-                                else:
-                                    game[key] = values
 
-            eprint(
-                f'• Merging game data... done.',
-                indent=False, overwrite=True
-            )
+            eprint('• Organizing game data... done.', indent=False, overwrite=True)
 
             # Write the output file
             eprint(
-                f'\n{Font.success}Finished processing titles. Writing data to {Font.b}{output_file}{Font.be}...{Font.end}',
+                f'\n{Font.success}Finished processing titles. Writing data to {Font.b}{output_file}{Font.be}...'
+                f'{Font.end}',
                 indent=False,
             )
 
             if output_file_type == 1:
                 # Create a Pandas dataframe from the JSON data to tabulate it easily
-                df = pd.json_normalize(games_list)
+                df = pd.json_normalize(games)
 
                 # Sanitize data in the columns
                 df = sanitize_columns(df)
@@ -324,10 +347,11 @@ def main() -> None:
 
             elif output_file_type == 2:
                 with open(output_file, 'w', encoding='utf-8-sig') as file:
-                    file.write(json.dumps(games_list, indent=2))
+                    file.write(json.dumps(games, indent=2))
 
             eprint(
-                f'{Font.success}Finished processing titles. Writing data to {Font.b}{output_file}{Font.be}... done.{Font.end}',
+                f'{Font.success}Finished processing titles. Writing data to {Font.b}{output_file}{Font.be}... '
+                f'done.{Font.end}',
                 overwrite=True,
                 wrap=False,
             )

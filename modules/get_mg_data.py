@@ -14,14 +14,14 @@ if TYPE_CHECKING:
 
 
 def add_games(
-    games_dict: dict[str, Any], games_list: list[dict[str, Any]], args: argparse.Namespace
+    games_dict: dict[str, Any], games: list[dict[str, Any]], args: argparse.Namespace
 ) -> list[dict[str, Any]]:
     """
     Reworks game data to be suitable for databases, then adds the game to a list.
 
     Args:
         games_dict (dict[str, Any]): A response from the MobyGames API containing game details.
-        games_list (list[dict[str, Any]]): A list containing game data from MobyGames.
+        games (list[dict[str, Any]]): A list containing game data from MobyGames.
         args (argparse.Namespace): User input arguments.
 
     Returns:
@@ -31,16 +31,16 @@ def add_games(
         for game_value in game_values:
             # Rework data to be better suited to a database
             if not args.raw:
-                game_value = restructure_mobygames_response(deepcopy(game_value), 1)
+                game_value = restructure_mobygames_response(deepcopy(game_value))
 
-            games_list.append(game_value)
+            games.append(game_value)
 
-    return games_list
+    return games
 
 
 def get_games(
     game_cache: dict[str, Any],
-    games_list: list[dict[str, Any]],
+    games: list[dict[str, Any]],
     platform_id: int,
     platform_name: str,
     completion_status: dict[str, bool],
@@ -54,7 +54,7 @@ def get_games(
 
     Args:
         game_cache (dict[str, Any]): The contents of the game cache file.
-        games_list (list[dict[str, Any]]): A list containing game data from MobyGames.
+        games (list[dict[str, Any]]): A list containing game data from MobyGames.
         platform_id (int): The MobyGames platform ID.
         platform_name (str): The MobyGames platform name.
         completion_status (dict[str, bool]): Which stages MobyDump has finished.
@@ -109,7 +109,7 @@ def get_games(
                 if games['games']:
                     game_cache[str(offset)] = games
 
-            games_list = add_games(games, games_list, args)
+            games = add_games(games, games, args)
 
             # Increment the offset
             offset = offset + offset_increment
@@ -149,13 +149,13 @@ def get_games(
             break
 
     # Sort the game list by title, dedupe if necessary
-    games_list = sorted(games_list, key=lambda d: d['title'])
+    games = sorted(games, key=lambda d: d['title'])
 
-    return games_list
+    return games
 
 
 def get_game_details(
-    games_list: list[dict[str, Any]],
+    games: list[dict[str, Any]],
     platform_id: int,
     completion_status: dict[str, bool],
     api_key: str,
@@ -169,12 +169,12 @@ def get_game_details(
     )
 
     # Only download game details that haven't been downloaded yet
-    for i, game in enumerate(games_list, start=1):
+    for i, game in enumerate(games, start=1):
         if not pathlib.Path(f'cache/{platform_id}/games-platform/{game['game_id']}.json').is_file():
             game_details: dict[str, Any] = api_request(
                 f'https://api.mobygames.com/v1/games/{game['game_id']}/platforms/{platform_id}?api_key={api_key}',
                 headers,
-                message=f'• Requesting details for {game['title']} [ID: {game['game_id']}] ({i:,}/{len(games_list):,})...',
+                message=f'• Requesting details for {game['title']} [ID: {game['game_id']}] ({i:,}/{len(games):,})...',
             ).json()
 
             with open(
@@ -185,7 +185,7 @@ def get_game_details(
                 game_details_cache.write(json.dumps(game_details, indent=4))
 
             eprint(
-                f'• Requesting details for {game['title']} [ID: {game['game_id']}] ({i:,}/{len(games_list):,})... done.\n',
+                f'• Requesting details for {game['title']} [ID: {game['game_id']}] ({i:,}/{len(games):,})... done.\n',
                 overwrite=True,
             )
 

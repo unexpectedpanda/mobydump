@@ -1,7 +1,5 @@
-from __future__ import annotations
-
-import re
 import warnings
+from copy import deepcopy
 from typing import Any
 
 import numpy as np
@@ -10,6 +8,83 @@ from natsort import natsorted
 
 # Ignore Pandas performance warnings for inserts
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
+
+def json_to_dataframe(data_in: dict[str, Any]) -> list[Any]:
+    """
+    Converts nested data to a flattened list.
+
+    From: https://stackoverflow.com/questions/41180960/convert-nested-json-to-csv-file-in-python
+
+    Args:
+        data_in (dict[str, Any]): JSON data in dictionary form.
+
+    Returns:
+        A flattened list.
+    """
+    def cross_join(left: list[dict[str, Any]], right: str):
+        """
+        Uses the cartesian product of a nested dictionary to flatten it.
+
+        Args:
+            left (list[dict[str, Any]]): _description_
+            right (str): The previous key in the hierarchy, so the column can be named
+                after it. For example, `key_subkey`.
+
+        Returns:
+            list[Any]: The flattened dictionary in list form.
+        """
+        new_rows = [] if right else left
+        for left_row in left:
+            for right_row in right:
+                temp_row = deepcopy(left_row)
+                for key, value in right_row.items():
+                    temp_row[key] = value
+                new_rows.append(deepcopy(temp_row))
+
+            return new_rows
+
+    def flatten_json(data: Any, prev_heading: str='') -> list[Any]:
+        """
+        Flattens a nested dictionary.
+
+        Args:
+            data (Any): Any valid JSON-like data-structure.
+            prev_heading (str, optional): The previous key in the hierarchy. Defaults to
+                ''.
+
+        Returns:
+            list[Any]: A flattened data structure, in list form.
+        """
+        if isinstance(data, dict):
+            rows = [{}]
+            for key, value in data.items():
+                rows = cross_join(rows, flatten_json(value, f'{prev_heading}_{key}'))
+        elif isinstance(data, list):
+            rows = []
+            for item in data:
+                [rows.append(elem) for elem in flatten_list(flatten_json(item, prev_heading))]
+        else:
+            rows = [{prev_heading[1:]: data}]
+
+        return rows
+
+    def flatten_list(data):
+        """
+        Flattens nested lists in a dictionary.
+
+        Args:
+            data (list[Any]): The list to flatten.
+
+        Yields:
+            Any: The flattened list.
+        """
+        for elem in data:
+            if isinstance(elem, list):
+                yield from flatten_list(elem)
+            else:
+                yield elem
+
+    return flatten_json(data_in)
 
 
 def reorder_columns(df: pd.core.frame.DataFrame) -> pd.core.frame.DataFrame:
@@ -114,100 +189,123 @@ def sanitize_columns(df: pd.core.frame.DataFrame) -> pd.core.frame.DataFrame:
     return df
 
 
-def restructure_mobygames_response(
-    game: dict[str, Any], stage: int, key: str = '', values: Any = {}
-) -> dict:
+def restructure_mobygames_response(game: dict[str, Any]) -> dict:
     """
     Extracts and sanitizes data from a MobyGames API response so it's more suitable for a database.
 
     Args:
         game (dict[str, Any]): A dictionary containing game details from the MobyGames API.
 
-        platform_id (int): The MobyGames platform ID.
-
-        stage (int): What stage is being sanitized.
-
-        key (str): Used only in stage 2.
-
-        values (Any): Used only in stage 2.
-
     Returns:
         dict: A dictionary containing sanitized game details.
     """
-    if stage == 1:
-        # Format alternate titles fields
-        if 'alternate_titles' in game:
+    # Format alternate titles fields
+    if 'alternate_titles' in game:
 
-            for alternate_title in game['alternate_titles']:
-                # Shorten the field names, as Access limits the line-length when importing
-                # files to 65534 characters
-                field_name: str = (
-                    f'Alt title ({re.sub(' title$', '', alternate_title['description'])})'
-                )
-                field_name = field_name.replace('Alternate title', 'Alt title')
+        for alternate_title in game['alternate_titles']:
+            game[f'alt titles|{alternate_title["description"]}'] = alternate_title['title']
 
-                game[field_name] = alternate_title['title']
+        del game['alternate_titles']
 
-            del game['alternate_titles']
+    # Format genre field
+    if 'genres' in game:
+        if game['genres']:
+            for genre in game['genres']:
+                game[f'genres|{genre["genre_category"]}'] = genre["genre_name"]
 
-        # Format genre field
-        if 'genres' in game:
-            if game['genres']:
-                for genre in game['genres']:
-                    game[f'genres ({genre["genre_category"]})'] = genre["genre_name"]
-
-            del game['genres']
-
-        # Drop unneeded data
-        del game['moby_score']
-        del game['num_votes']
-        del game['platforms']
-        del game['sample_cover']
-        del game['sample_screenshots']
-
-    if stage == 2:
-        # Bring nested data up to the column level and format fields accordingly
-        if key == 'attributes':
-            attribute_counter: list[Any] = []
-            for attributes in values:
-                attribute_counter.append(attributes['attribute_category_name'])
-
-                if 'attribute_category_name' in attributes and 'attribute_name' in attributes:
-                    game[
-                        f'{attributes["attribute_category_name"]} {attribute_counter.count(attributes['attribute_category_name'])}'
-                    ] = attributes['attribute_name']
-        elif key == 'patches':
-            for i, patch in enumerate(values):
-                if 'description' in patch:
-                    game[f'Patch {i}: Description'] = patch['description']
-                if 'release_date' in patch:
-                    game[f'Patch {i}: Release date'] = patch['release_date']
-        elif key == 'ratings':
-            for rating in values:
-                game[rating['rating_system_name']] = rating['rating_name']
-        elif key == 'releases':
-            for i, releases in enumerate(values, start=1):
-                for release in releases:
-                    if release == 'companies':
-                        for company in releases[release]:
-                            if 'company_name' in company and 'role' in company:
-                                game[f'Release {i}: {company["role"]}'] = company['company_name']
-                    elif release == 'countries':
-                        for j, country in enumerate(releases[release], start=1):
-                            game[f'Release {i}: Country {j}'] = country
-                    elif release == 'product_codes':
-                        for product_code in releases[release]:
-                            for product_code_entry in product_code:
-                                game[
-                                    f'Release {i}: {product_code_entry}'.title()
-                                    .replace('_', '')
-                                    .replace(' id', 'ID')
-                                ] = product_code[product_code_entry]
-                    elif release == 'release_date':
-                        game[f'Release {i}: Release date'] = releases[release]
-                    else:
-                        game[f'Release {i}: {release}'] = releases[release]
-        else:
-            game[key] = values
+        del game['genres']
 
     return game
+
+
+
+def split_game_details(game_id: int, game_details: dict[str, Any], raw_mode: bool):
+    """ Splits the game detail response into multiple dataframes, due to the data having
+    different sizes.
+
+    Args:
+        game_id (int): The MobyGames game ID.
+
+        key (str): The key from the response that's being processed.
+
+        values (Any): The values associated with the key that are being processed.
+
+    Returns:
+        _type_: _description_
+    """
+
+    attributes: list[dict[str, Any]] = []
+    patches: list[dict[str, Any]] = []
+    ratings: list[dict[str, Any]] = []
+    releases: list[dict[str, Any]] = []
+
+    # Set up keys to ignore
+    ignore_keys: list[str] = ['game_id', 'platform_id', 'platform_name']
+
+    for key, values in game_details.items():
+        if key not in ignore_keys:
+            general_attribute: dict[str, Any] = {'attribute_category_id': -1, 'attribute_category_name': key.capitalize().replace('_', ' '), 'attribute_id': -1, 'attribute_name': values}
+
+            if not raw_mode:
+                if key == 'attributes':
+                    attributes = json_to_dataframe(values)
+                    # attributes_dataframe.insert(0, 'game_id', game_id)
+                elif key == 'patches':
+                    patches = json_to_dataframe(values)
+                    # input(attributes_dataframe.join(patches_dataframe))
+                elif key == 'ratings':
+                    ratings = json_to_dataframe(values)
+                    # for rating in values:
+                    #     game_detail[rating['rating_system_name']] = rating['rating_name']
+                elif key == 'releases':
+                    releases = json_to_dataframe(values)
+                #     for releases in values:
+                #         for release in releases:
+                #             if release == 'companies':
+                #                 for company in releases[release]:
+                #                     if 'company_name' in company and 'role' in company:
+                #                         game_detail[f'{company["role"]}'] = company['company_name']
+
+                #             elif release == 'countries':
+                #                 for i, country in enumerate(releases[release], start=1):
+                #                     game_detail[f'Country {i}'] = country
+
+                #             elif release == 'product_codes':
+                #                 for product_code in releases[release]:
+                #                     for product_code_entry in product_code:
+                #                         game_detail[
+                #                             f'{product_code_entry}'.title()
+                #                             .replace('_', '')
+                #                             .replace(' id', 'ID')
+                #                         ] = product_code[product_code_entry]
+                #             elif release == 'release_date':
+                #                 game_detail['Release date'] = releases[release]
+
+                #             else:
+                #                 game_detail[f'{release}'] = releases[release]
+
+                #         game_releases.append(game_detail)
+                else:
+                    attributes.append(general_attribute)
+            else:
+                attributes.append(general_attribute)
+
+
+    if attributes:
+        attributes_dataframe = pd.DataFrame(attributes)
+        attributes_dataframe.insert(0, 'game_id', game_id)
+        # input(attributes_dataframe)
+    if patches:
+        patches_dataframe = pd.DataFrame(patches)
+        patches_dataframe.insert(0, 'game_id', game_id)
+        # input(patches_dataframe)
+    if ratings:
+        ratings_dataframe = pd.DataFrame(ratings)
+        ratings_dataframe.insert(0, 'game_id', game_id)
+        # input(ratings_dataframe)
+    if releases:
+        releases_dataframe = pd.DataFrame(releases)
+        releases_dataframe.insert(0, 'game_id', game_id)
+        input(releases_dataframe)
+
+    return attributes
