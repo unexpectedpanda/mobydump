@@ -49,9 +49,9 @@ def user_input() -> argparse.Namespace:
         '--delimiter',
         metavar='"<DELIMITER>"',
         type=str,
-        help=f'R|The single character delimiter to use in the output file.'
+        help=f'R|The single character delimiter to use in the output files.'
         f'\nAccepts single-byte characters only. When not specified,'
-        f'\ndefaults to {Font.b}tab{Font.be}. Ignored if type is set to {Font.b}JSON{Font.be}.'
+        f'\ndefaults to {Font.b}tab{Font.be}. Ignored if filetype is set to {Font.b}JSON{Font.be}.'
         '\n\n',
     )
 
@@ -68,12 +68,23 @@ def user_input() -> argparse.Namespace:
     )
 
     game_options.add_argument(
-        '-o',
-        '--output',
-        metavar='"<FILENAME>"',
+        '-pr',
+        '--prefix',
+        metavar='"<PREFIX>"',
         type=str,
-        help=f'R|The filename to output to. When not specified, defaults to'
-        f'\n{Font.b}output.txt{Font.be}.'
+        help=f'R|The prefix to add to the output files. Ignored if filetype'
+        f'\nis set to {Font.b}JSON{Font.be}. When not specified, defaults to nothing.'
+        '\nBy default, the output files are named as follows:'
+        f'\n\n• {Font.b}[1] Platform name - Games.txt{Font.be}'
+        f'\n• {Font.b}[2] Platform name - Alternate titles.txt{Font.be}'
+        f'\n• {Font.b}[3] Platform name - Genres.txt{Font.be}'
+        f'\n• {Font.b}[4] Platform name - Attributes.txt{Font.be}'
+        f'\n• {Font.b}[5] Platform name - Releases.txt{Font.be}'
+        f'\n• {Font.b}[6] Platform name - Patches.txt{Font.be}'
+        f'\n• {Font.b}[7] Platform name - Product codes.txt{Font.be}'
+        f'\n• {Font.b}[8] Platform name - Ratings.txt{Font.be}'
+        '\n\nIf a prefix is specified, it\'s inserted between the number and the'
+        '\nplatform name.'
         '\n\n',
     )
 
@@ -89,15 +100,6 @@ def user_input() -> argparse.Namespace:
         '\n\nUse lower numbers at your own risk. Unless you have an'
         '\nagreement with MobyGames, lower numbers than are suitable for'
         '\nyour API key could get your client or API key banned.'
-        '\n\n',
-    )
-
-    game_options.add_argument(
-        '--raw',
-        action='store_true',
-        help=f'R|Don\'t format the output text or re-arrange columns. This is'
-        '\na compatibility setting for if MobyGames changes its API responses.'
-        f'\nIgnored if type is set to {Font.b}JSON{Font.be}.'
         '\n\n',
     )
 
@@ -135,16 +137,12 @@ def user_input() -> argparse.Namespace:
             eprint('Valid file types are 1 or 2. Exiting...', level='error')
             sys.exit(1)
 
-    if args.output and not args.games:
-        eprint('Must specify --games with --output. Exiting...', level='error')
+    if args.prefix and not args.games:
+        eprint('Must specify --games with --prefix. Exiting...', level='error')
         sys.exit(1)
 
     if args.ratelimit and not args.games:
         eprint('Must specify --games with --ratelimit. Exiting...', level='error')
-        sys.exit(1)
-
-    if args.raw and not args.games:
-        eprint('Must specify --games with --raw. Exiting...', level='error')
         sys.exit(1)
 
     if args.useragent and not (args.games or args.platforms):

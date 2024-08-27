@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import json
 import pathlib
-from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
-from modules.data_sanitize import restructure_mobygames_response
 from modules.requests import api_request, request_wait
 from modules.utils import Font, eprint
 
@@ -29,10 +27,6 @@ def add_games(
     """
     for game_values in games_dict.values():
         for game_value in game_values:
-            # Rework data to be better suited to a database
-            if not args.raw:
-                game_value = restructure_mobygames_response(deepcopy(game_value))
-
             games.append(game_value)
 
     return games

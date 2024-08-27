@@ -17,7 +17,7 @@ import pandas as pd
 from dotenv import load_dotenv  # type: ignore
 
 import modules.constants as const
-from modules.data_sanitize import reorder_columns, sanitize_columns, split_game_details
+from modules.data_sanitize import sanitize_dataframes
 from modules.get_mg_data import add_games, get_game_details, get_games, get_platforms
 from modules.input import user_input
 from modules.requests import request_wait
@@ -270,44 +270,77 @@ def main() -> None:
                     headers,
                 )
 
-            # Organize the data for output
+            # Organize the data into separate tables for output
             eprint(
                 '• Organizing game data...',
                 indent=False,
             )
 
-            # Organize stage 1 data for multiple table export
-            genres: list[dict[str, str]] = []
-            alternate_titles: list[dict[str, str]] = []
-            delete_keys: list[str] = []
-            unwanted_keys: list[str] = ['moby_score', 'num_votes', 'platforms', 'sample_cover', 'sample_screenshots']
+            #------------------------------------
+            # Handle games data from the platform
+            #------------------------------------
 
-            for game in games:
-                for key in game.keys():
-                    if key.startswith('genres|'):
-                        genre: dict[str, str] = {}
-                        if 'game_id' not in genre:
-                            genre['game_id'] = game['game_id']
+            games_dataframe = pd.json_normalize(data=games, errors='ignore')
 
-                        genre[key.replace('genres|', '')] = game[key]
-                        genres.append(genre)
-                        delete_keys.append(key)
-                    elif key.startswith('alt titles|'):
-                        alternate_title: dict[str, str] = {}
-                        if 'game_id' not in genre:
-                            genre['game_id'] = game['game_id']
+            # Drop unwanted data
+            unwanted_columns: list[str] = [
+                'moby_score',
+                'num_votes',
+                'platforms',
+                'sample_cover',
+                'sample_cover.platforms',
+                'sample_cover.height',
+                'sample_cover.image',
+                'sample_cover.thumbnail_image',
+                'sample_cover.width',
+                'sample_screenshots',
+                ]
 
-                        alternate_title[key.replace('alt titles|', '')] = game[key]
-                        alternate_titles.append(alternate_title)
-                        delete_keys.append(key)
+            for column in unwanted_columns:
+                try:
+                    games_dataframe.pop(column)
+                except Exception:
+                    pass
 
-            # Delete keys and unwanted data from the main game data
-            for game in games:
-                for delete_key in delete_keys + unwanted_keys:
-                    if delete_key in game:
-                        del(game[delete_key])
+            # Expand columns that need it
+            # games_dataframe = games_dataframe.explode('sample_cover.platforms', ignore_index=True)
+            games_dataframe.insert(0, 'game_id', games_dataframe.pop('game_id'))
+            games_dataframe.insert(1, 'title', games_dataframe.pop('title'))
+
+            # Split out alternate titles into their own dataframe
+            games_alternate_titles_dataframe = games_dataframe.filter(['alternate_titles', 'game_id'])
+            games_dataframe.pop('alternate_titles')
+
+            # Expand alternate titles and add the game ID
+            games_alternate_titles_dataframe = games_alternate_titles_dataframe.explode('alternate_titles', ignore_index=True)
+
+            exploded_alternate_titles = pd.json_normalize(games_alternate_titles_dataframe['alternate_titles'])
+            exploded_alternate_titles['game_id'] = games_alternate_titles_dataframe['game_id']
+
+            games_alternate_titles_dataframe = exploded_alternate_titles
+            games_alternate_titles_dataframe.insert(0, 'game_id', games_alternate_titles_dataframe.pop('game_id'))
+
+            # Split out genres into their own dataframe
+            genres_dataframe = games_dataframe.filter(['genres', 'game_id'])
+            games_dataframe.pop('genres')
+
+            # Expand genres and add the game ID
+            genres_dataframe = genres_dataframe.explode('genres', ignore_index=True)
+
+            exploded_genres = pd.json_normalize(genres_dataframe['genres'])
+            exploded_genres['game_id'] = genres_dataframe['game_id']
+
+            genres_dataframe = exploded_genres
+            genres_dataframe.insert(0, 'game_id', genres_dataframe.pop('game_id'))
+
+            # Sanitize dataframes
+            games_dataframe = sanitize_dataframes(games_dataframe)
+            games_alternate_titles_dataframe = sanitize_dataframes(games_alternate_titles_dataframe)
+            genres_dataframe = sanitize_dataframes(genres_dataframe)
 
             # Organize stage 2 data for multiple table export
+            games_details: list[dict[str, Any]] = []
+
             for game in games:
                 if pathlib.Path(
                     f'cache/{platform_id}/games-platform/{game['game_id']}.json'
@@ -315,11 +348,53 @@ def main() -> None:
                     with open(
                         pathlib.Path(f'cache/{platform_id}/games-platform/{game['game_id']}.json'),
                         encoding='utf-8',
-                    ) as game_details_cache:
-                        game_details: dict[str, Any] = json.load(game_details_cache)
+                    ) as games_details_cache:
+                        games_details.append(json.load(games_details_cache))
 
-                        # Rework data to be better suited to a database
-                        game_detail_tables = split_game_details(game['game_id'], game_details, args.raw)
+            #------------------------------------
+            # Handle individual game details data
+            #------------------------------------
+
+            # Handle attributes
+            attributes_dataframe = pd.json_normalize(data=games_details, record_path='attributes', meta=['game_id'], errors='ignore')
+            attributes_dataframe.insert(0, 'game_id', attributes_dataframe.pop('game_id'))
+
+            # Handle releases
+            releases_dataframe = pd.json_normalize(data=games_details, record_path=['releases', 'companies'], meta=['game_id', ['releases', 'countries'], ['releases', 'description'], ['releases', 'release_date']], errors='ignore')
+            releases_dataframe.insert(0, 'game_id', releases_dataframe.pop('game_id'))
+            releases_dataframe.insert(1, 'releases.release_date', releases_dataframe.pop('releases.release_date'))
+
+            # Expand the countries list in the releases dataframe
+            releases_dataframe = releases_dataframe.explode('releases.countries', ignore_index=True)
+
+            # Handle product codes
+            product_codes_dataframe = pd.json_normalize(data=games_details, record_path=['releases', 'product_codes'], meta=['game_id', ['releases', 'release_date']])
+            product_codes_dataframe.insert(0, 'game_id', product_codes_dataframe.pop('game_id'))
+            product_codes_dataframe.insert(1, 'releases.release_date', product_codes_dataframe.pop('releases.release_date'))
+
+            # Handle patches
+            patches_dataframe = pd.json_normalize(data=games_details, record_path=['patches'], meta=['game_id'])
+            patches_dataframe.insert(0, 'game_id', patches_dataframe.pop('game_id'))
+
+            # Handle ratings
+            ratings_dataframe = pd.json_normalize(data=games_details, record_path=['ratings'], meta=['game_id'])
+            ratings_dataframe.insert(0, 'game_id', ratings_dataframe.pop('game_id'))
+
+            # Sanitize dataframes
+            attributes_dataframe = sanitize_dataframes(attributes_dataframe)
+            releases_dataframe = sanitize_dataframes(releases_dataframe)
+            product_codes_dataframe = sanitize_dataframes(product_codes_dataframe)
+            patches_dataframe = sanitize_dataframes(patches_dataframe)
+
+            print(f'\n------\nGAMES\n------\n{games_dataframe}')
+            print(f'\n------\nALTERNATE TITLES\n------\n{games_alternate_titles_dataframe}')
+            print(f'\n------\nGENRES\n------\n{genres_dataframe}')
+
+            print(f'\n------\nATTRIBUTES\n------\n{attributes_dataframe}')
+            print(f'\n------\nRELEASES\n------\n{releases_dataframe}')
+            print(f'\n------\nPRODUCT CODES\n------\n{product_codes_dataframe}')
+            print(f'\n------\nPATCHES\n------\n{patches_dataframe}')
+            print(f'\n------\nRATINGS\n------\n{ratings_dataframe}')
 
 
             eprint('• Organizing game data... done.', indent=False, overwrite=True)
@@ -335,12 +410,8 @@ def main() -> None:
                 # Create a Pandas dataframe from the JSON data to tabulate it easily
                 df = pd.json_normalize(games)
 
-                # Sanitize data in the columns
-                df = sanitize_columns(df)
-
-                # Reorder data
-                if not args.raw:
-                    df = reorder_columns(df)
+                # Sanitize data in the dataframes
+                df = sanitize_dataframes(df)
 
                 # Write to delimited file, using a BOM so Microsoft apps interpret the encoding correctly
                 df.to_csv(output_file, index=False, encoding='utf-8-sig', sep=delimiter)
