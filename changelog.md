@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.3 (25 August 2024)
+## v0.3 (28 August 2024)
 
 - Extra game details are now pulled from the `/games/{game_id}/platforms/{platform_id}`
   endpoint after the initial details have been pulled from
@@ -16,18 +16,9 @@
 - You can now set the rate limit in the `.env` file, so you don't need to add the command
   line argument each time.
 
-- MobyDump now only shows the release date for the selected platform. Other platforms are
-  no longer displayed.
-
-- Alternate titles are no longer concatenated into the one field, and have been moved to
-  the end of the dataset. Unfortunately many of these titles aren't platform-specific,
-  but they're difficult to weed out as they aren't paired with platform IDs.
-
-- Removed the following columns from the export:
-
-  - MobyGames score and number of votes
-
-  - Screenshot and cover images
+- Major restructuring so multiple files are exported for different sets of data. This is
+  to work with the different data shapes, as well as the Microsoft Access limit of 255
+  columns, and line lengths of 65,534 characters.
 
 - A bug has been fixed where the rate limit was being interpreted as a string instead of
   an integer.

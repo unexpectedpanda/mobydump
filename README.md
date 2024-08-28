@@ -1,17 +1,18 @@
 # MobyDump
 
 MobyDump is a command line application that downloads data from the MobyGames API for a
-specific platform, and outputs it to a delimiter-separated value file or JSON. It's
-purpose-built for the [Exo projects](https://github.com/exoscoriae).
+specific platform, and then outputs it to delimiter-separated value files for import into
+Microsoft Access, or alternatively a JSON file. It's purpose-built for the
+[Exo projects](https://github.com/exoscoriae).
 
 MobyDump auto-resumes the download if the process is interrupted by the user, or if select
 HTTP error codes are received.
 
 ## Before you begin
 
-If you're not using the [compiled release](https://github.com/unexpectedpanda/mobydump/releases),
-then you need to set up your development environment. To do so, complete the following
-steps:
+If you're not using the
+[compiled release](https://github.com/unexpectedpanda/mobydump/releases), then you need to
+set up your development environment. To do so, complete the following steps:
 
 1.  [Install Python 3.10 or higher](https://www.python.org/).
 
@@ -23,7 +24,7 @@ steps:
 
 ### Set up your API key and rate limit
 
-No matter which version of MobyDump you use, you need to set up your MobyGames API key. To
+No matter which variant of MobyDump you use, you need to set up your MobyGames API key. To
 do so, complete the following steps:
 
 1.  Create a file named `.env` in the same folder MobyDump is in.
@@ -108,7 +109,7 @@ Android                                       91
 ...
 ```
 
-Next, get the games based on that platform ID.
+Next, get the games based on a platform ID.
 
 ```
 mobydump.py -g 35
@@ -134,9 +135,9 @@ Flags that can be used with `--games`:
 
 ```
   -d "<DELIMITER>", --delimiter "<DELIMITER>"
-                        The single character delimiter to use in the output file.
+                        The single character delimiter to use in the output files.
                         Accepts single-byte characters only. When not specified,
-                        defaults to tab. Ignored if type is set to JSON.
+                        defaults to tab. Ignored if filetype is set to JSON.
 
   -f <FILE_TYPE_ID>, --filetype <FILE_TYPE_ID>
                         The file type to output to. When not specified, defaults to 1.
@@ -145,9 +146,25 @@ Flags that can be used with `--games`:
                         1 - Delimiter separated value
                         2 - JSON
 
-  -o "<FILENAME>", --output "<FILENAME>"
-                        The filename to output to. When not specified, defaults to
-                        output.txt.
+                        Delimiter separated value files are sanitized for problem characters,
+                        JSON data is left raw.
+
+  -pr "<PREFIX>", --prefix "<PREFIX>"
+                        The prefix to add to the output files. Ignored if filetype
+                        is set to JSON. When not specified, defaults to nothing.
+                        By default, the output files are named as follows:
+
+                        • 1) Platform name - Games.txt
+                        • 2) Platform name - Alternate titles.txt
+                        • 3) Platform name - Genres.txt
+                        • 4) Platform name - Attributes.txt
+                        • 5) Platform name - Releases.txt
+                        • 6) Platform name - Patches.txt
+                        • 7) Platform name - Product codes.txt
+                        • 8) Platform name - Ratings.txt
+
+                        If a prefix is specified, it's inserted between the number and the
+                        platform name.
 
   -r <SECONDS_PER_REQUEST>, --ratelimit <SECONDS_PER_REQUEST>
                         How many seconds to wait between requests. When not specified,
@@ -160,13 +177,9 @@ Flags that can be used with `--games`:
                         agreement with MobyGames, lower numbers than are suitable for
                         your API key could get your client or API key banned.
 
-  --raw                 Don't format the output text or re-arrange columns. This is
-                        a compatibility setting for if MobyGames changes its API responses.
-                        Ignored if type is set to JSON.
-
   -u "<USER_AGENT>", --useragent "<USER_AGENT>"
                         Change the user agent MobyDump supplies when making requests.
-                        Defaults to MobyDump/0.1; https://www.retro-exo.com/.
+                        Defaults to MobyDump/0.3; https://www.retro-exo.com/.
 ```
 
 ## Known limitations
@@ -183,25 +196,47 @@ Flags that can be used with `--games`:
   stick to the advertised limits and only run one session of MobyDump, or your client or
   API key could be banned by MobyGames for abuse.
 
-## Importing into Microsoft Access 2013&ndash;2021
+## Importing into Microsoft Access
 
-Assuming you exported to a delimiter-separated value file, here's how you open it in
-Microsoft Access:
+Assuming you exported to delimiter-separated value files, here are the settings you need
+to import them into Microsoft Access:
 
-1.  Open the file that MobyDump created.
-
-1.  Choose **Delimited** as the format.
-
-1.  Click **Next**.
-
-1.  Choose the delimiter.
+1.  Choose **Delimited** as the format, and then choose the delimiter.
 
 1.  Change **Text Qualifier** to `"`.
 
-1.  Click **First row contains field names**.
+1.  Select **First row contains field names**.
 
-1.  Click **Advanced**.
+1.  The following files contain fields whose field data type must be set manually before
+    completing the import to avoid errors:
 
-1.  Change the **First release date** field data type to **Short Text**.
-
-1.  Click **Finish**.
+    <table>
+      <thead>
+        <tr>
+          <th>File</th>
+          <th>Field</th>
+          <th>Field type</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Patches</td>
+          <td><code>description</code></td>
+          <td>Long text</td>
+        </tr>
+        <tr>
+          <td>Product codes</td>
+          <td><code>releases_release_date</code></td>
+          <td>Short text</td>
+        </tr>
+        <tr>
+          <td rowspan="2">Releases</td>
+          <td><code>releases_release_date</code></td>
+          <td>Short text</td>
+        </tr>
+        <tr>
+          <td><code>releases_description</code></td>
+          <td>Long text</td>
+        </tr>
+      </tbody>
+    </table>

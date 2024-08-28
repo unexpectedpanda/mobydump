@@ -64,6 +64,8 @@ def user_input() -> argparse.Namespace:
         f'\nChoose a number from the following list:'
         '\n\n1 - Delimiter separated value'
         '\n2 - JSON'
+        '\n\nDelimiter separated value files are sanitized for problem characters,'
+        '\nJSON data is left raw.'
         '\n\n',
     )
 
@@ -75,14 +77,14 @@ def user_input() -> argparse.Namespace:
         help=f'R|The prefix to add to the output files. Ignored if filetype'
         f'\nis set to {Font.b}JSON{Font.be}. When not specified, defaults to nothing.'
         '\nBy default, the output files are named as follows:'
-        f'\n\n• {Font.b}[1] Platform name - Games.txt{Font.be}'
-        f'\n• {Font.b}[2] Platform name - Alternate titles.txt{Font.be}'
-        f'\n• {Font.b}[3] Platform name - Genres.txt{Font.be}'
-        f'\n• {Font.b}[4] Platform name - Attributes.txt{Font.be}'
-        f'\n• {Font.b}[5] Platform name - Releases.txt{Font.be}'
-        f'\n• {Font.b}[6] Platform name - Patches.txt{Font.be}'
-        f'\n• {Font.b}[7] Platform name - Product codes.txt{Font.be}'
-        f'\n• {Font.b}[8] Platform name - Ratings.txt{Font.be}'
+        f'\n\n• {Font.b}1) Platform name - Games.txt{Font.be}'
+        f'\n• {Font.b}2) Platform name - Alternate titles.txt{Font.be}'
+        f'\n• {Font.b}3) Platform name - Genres.txt{Font.be}'
+        f'\n• {Font.b}4) Platform name - Attributes.txt{Font.be}'
+        f'\n• {Font.b}5) Platform name - Releases.txt{Font.be}'
+        f'\n• {Font.b}6) Platform name - Patches.txt{Font.be}'
+        f'\n• {Font.b}7) Platform name - Product codes.txt{Font.be}'
+        f'\n• {Font.b}8) Platform name - Ratings.txt{Font.be}'
         '\n\nIf a prefix is specified, it\'s inserted between the number and the'
         '\nplatform name.'
         '\n\n',
