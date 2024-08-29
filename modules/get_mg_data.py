@@ -2,25 +2,19 @@ from __future__ import annotations
 
 import json
 import pathlib
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from modules.requests import api_request, request_wait
 from modules.utils import Font, eprint
 
-if TYPE_CHECKING:
-    import argparse
 
-
-def add_games(
-    games_dict: dict[str, Any], games: list[dict[str, Any]], args: argparse.Namespace
-) -> list[dict[str, Any]]:
+def add_games(games_dict: dict[str, Any], games: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Reworks game data to be suitable for databases, then adds the game to a list.
 
     Args:
         games_dict (dict[str, Any]): A response from the MobyGames API containing game details.
         games (list[dict[str, Any]]): A list containing game data from MobyGames.
-        args (argparse.Namespace): User input arguments.
 
     Returns:
         list[dict[str, Any]]: A list containing game data from MobyGames.
@@ -33,32 +27,23 @@ def add_games(
 
 
 def get_games(
-    game_cache: dict[str, Any],
-    games: list[dict[str, Any]],
     platform_id: int,
     platform_name: str,
     completion_status: dict[str, bool],
     api_key: str,
     rate_limit: int,
     headers: dict[str, str],
-    args: argparse.Namespace,
-) -> list[dict[str, Any]]:
+) -> None:
     """
     Gets the titles, alternate titles, descriptions, URLs, and genres from MobyGames.
 
     Args:
-        game_cache (dict[str, Any]): The contents of the game cache file.
-        games (list[dict[str, Any]]): A list containing game data from MobyGames.
         platform_id (int): The MobyGames platform ID.
         platform_name (str): The MobyGames platform name.
         completion_status (dict[str, bool]): Which stages MobyDump has finished.
         api_key (str): The MobyGames API key.
         rate_limit (int): The rate limit in seconds per request.
         headers (dict[str, str]): The headers to use in the API request.
-        args (argparse.Namespace): User input arguments.
-
-    Returns:
-        list[dict[str, Any]]: A list containing game data from MobyGames.
     """
     eprint(f'{Font.b}{Font.u}Stage 1{Font.end}')
     eprint(
@@ -70,6 +55,9 @@ def get_games(
     # Set the request offset
     offset: int = 0
     offset_increment: int = 100
+
+    # Read the game cache file if it exists
+    game_cache: dict[str, Any] = read_game_cache(platform_id)
 
     # Change the offset if we need to resume
     if game_cache and not completion_status['stage_1_finished']:
@@ -92,35 +80,33 @@ def get_games(
 
         if not completion_status['stage_1_finished']:
             # Make the request for the platform's games
-            games: dict[str, Any] = api_request(
+            game_dict: dict[str, Any] = api_request(
                 f'https://api.mobygames.com/v1/games?api_key={api_key}&platform={platform_id}&offset={offset}&limit={offset_increment}',
                 headers,
                 message=f'• Requesting titles {offset}-{offset+offset_increment}...',
             ).json()
 
             # Add games to the cache, and then process them
-            if 'games' in games:
-                if games['games']:
-                    game_cache[str(offset)] = games
-
-            games = add_games(games, games, args)
+            if 'games' in game_dict:
+                if game_dict['games']:
+                    game_cache[str(offset)] = game_dict
 
             # Increment the offset
             offset = offset + offset_increment
 
             # Break the loop if MobyGames returns an empty response or if there's less than 100 titles, as we've
             # reached the end
-            if 'games' in games:
+            if 'games' in game_dict:
                 eprint(
                     f'• Requesting titles {offset-offset_increment}-{offset}... done.\n',
                     overwrite=True,
                 )
 
-                if len(games['games']) < 100:
+                if len(game_dict['games']) < 100:
                     completion_status['stage_1_finished'] = True
                     end_loop = True
 
-            elif not games['games']:
+            elif not game_dict['games']:
                 completion_status['stage_1_finished'] = True
                 end_loop = True
         else:
@@ -142,11 +128,6 @@ def get_games(
         if end_loop:
             break
 
-    # Sort the game list by title, dedupe if necessary
-    games = sorted(games, key=lambda d: d['title'])
-
-    return games
-
 
 def get_game_details(
     games: list[dict[str, Any]],
@@ -156,6 +137,17 @@ def get_game_details(
     rate_limit: int,
     headers: dict[str, str],
 ) -> None:
+    """
+    Gets the attributes, patches, ratings, and releases for each game from MobyGames.
+
+    Args:
+        games (list[dict[str, Any]]): A list containing game data from MobyGames.
+        platform_id (int): The MobyGames platform ID.
+        completion_status (dict[str, bool]): Which stages MobyDump has finished.
+        api_key (str): The MobyGames API key.
+        rate_limit (int): The rate limit in seconds per request.
+        headers (dict[str, str]): The headers to use in the API request.
+    """
 
     eprint(
         f'\n{Font.b}{Font.u}Stage 2{Font.end}\nGetting attributes, patches, ratings, and releases for each game.\n',
@@ -221,3 +213,24 @@ def get_platforms(api_key, headers) -> dict[str, list[dict[str, str | int]]]:
         platform_cache.write(json.dumps(platforms, indent=4))
 
     return platforms
+
+
+def read_game_cache(platform_id: int) -> dict[str, Any]:
+    """
+    Reads the game cache file.
+
+    Returns:
+        dict[str, Any]: The game cache in JSON form.
+    """
+    game_cache: dict[str, Any] = {}
+
+    if pathlib.Path(f'cache/{platform_id}/games.json').is_file():
+        with open(
+            pathlib.Path(f'cache/{platform_id}/games.json'), encoding='utf-8'
+        ) as platform_request_cache:
+            try:
+                game_cache = json.load(platform_request_cache)
+            except Exception:
+                pass
+
+    return game_cache

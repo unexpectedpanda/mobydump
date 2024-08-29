@@ -18,7 +18,13 @@ from dotenv import load_dotenv  # type: ignore
 
 import modules.constants as const
 from modules.data_sanitize import sanitize_dataframes
-from modules.get_mg_data import add_games, get_game_details, get_games, get_platforms
+from modules.get_mg_data import (
+    add_games,
+    get_game_details,
+    get_games,
+    get_platforms,
+    read_game_cache,
+)
 from modules.input import user_input
 from modules.requests import request_wait
 from modules.utils import Font, eprint, old_windows
@@ -122,6 +128,12 @@ def main() -> None:
             if args.filetype:
                 output_file_type = args.filetype
 
+            # Set the prefix
+            prefix: str = ''
+
+            if args.prefix:
+                prefix = args.prefix
+
             # Set the delimiter
             delimiter: str = '\t'
 
@@ -182,21 +194,6 @@ def main() -> None:
                     except Exception:
                         pass
 
-            # Read the game cache file if it exists
-            game_cache: dict[str, Any] = {}
-
-            if pathlib.Path(f'cache/{platform_id}/games.json').is_file():
-                with open(
-                    pathlib.Path(f'cache/{platform_id}/games.json'), encoding='utf-8'
-                ) as platform_request_cache:
-                    try:
-                        game_cache = json.load(platform_request_cache)
-                    except Exception:
-                        pass
-
-            # Set up the games list for populating
-            games: list[dict[str, Any]] = []
-
             # If everything has already been downloaded, ask the user if they want to redownload or write out from
             # cache.
             resume: str = ''
@@ -234,27 +231,28 @@ def main() -> None:
                 ) as status_cache:
                     status_cache.write(json.dumps(completion_status, indent=4))
 
-                # Empty out the cache in memory
-                game_cache = {}
-
-            # Repopulate the games list if resuming or writing out from cache
-            if not games:
-                for values in game_cache.values():
-                    games = add_games(values, games, args)
-
             # Stage 1: Download games for the platform
             if not completion_status['stage_1_finished']:
-                games = get_games(
-                    game_cache,
-                    games,
+                get_games(
                     platform_id,
                     platform_name,
                     completion_status,
                     api_key,
                     rate_limit,
                     headers,
-                    args,
                 )
+
+            # Repopulate the games list if resuming or writing out from cache
+            games: list[dict[str, Any]] = []
+            game_cache: dict[str, Any] = read_game_cache(platform_id)
+
+            for values in game_cache.values():
+                games = add_games(values, games)
+
+            del game_cache
+
+            # Sort the game list by title, dedupe if necessary
+            games = sorted(games, key=lambda d: d['title'])
 
             # Stage 2: Download individual game details
             if not completion_status['stage_2_finished']:
@@ -292,11 +290,6 @@ def main() -> None:
                             for key, values in loaded_game_details.items():
                                 game[key] = values
 
-                if args.prefix:
-                    prefix: str = f'{args.prefix} -'
-                else:
-                    prefix = ''
-
                 output_file: str = f'{prefix}{raw_platform_name}.json'
 
                 with open(pathlib.Path(output_file), 'w', encoding='utf-8-sig') as file:
@@ -318,10 +311,7 @@ def main() -> None:
                     indent=False,
                 )
 
-                # ------------------------------------
                 # Handle games data from the platform
-                # ------------------------------------
-
                 games_dataframe = pd.json_normalize(data=games, errors='ignore')
 
                 # Drop unwanted data
@@ -345,7 +335,6 @@ def main() -> None:
                         pass
 
                 # Expand columns that need it
-                # games_dataframe = games_dataframe.explode('sample_cover.platforms', ignore_index=True)
                 games_dataframe.insert(0, 'game_id', games_dataframe.pop('game_id'))
                 games_dataframe.insert(1, 'title', games_dataframe.pop('title'))
 
@@ -383,7 +372,7 @@ def main() -> None:
                 genres_dataframe = exploded_genres
                 genres_dataframe.insert(0, 'game_id', genres_dataframe.pop('game_id'))
 
-                # Organize stage 2 data for multiple table export
+                # Get individual game details data
                 games_details: list[dict[str, Any]] = []
 
                 for game in games:
@@ -397,10 +386,6 @@ def main() -> None:
                             encoding='utf-8',
                         ) as games_details_cache:
                             games_details.append(json.load(games_details_cache))
-
-                # ------------------------------------
-                # Handle individual game details data
-                # ------------------------------------
 
                 # Handle attributes
                 attributes_dataframe = pd.json_normalize(
@@ -469,26 +454,35 @@ def main() -> None:
                     # Write to delimited file, using a BOM so Microsoft apps interpret the encoding correctly
                     dataframe.to_csv(output_file, index=False, encoding='utf-8-sig', sep=delimiter)
 
-                if args.prefix:
-                    prefix = f' - {args.prefix}'
-                else:
-                    prefix = ''
+                write_file(games_dataframe, f'{prefix}{raw_platform_name} - (Primary) Games.txt')
 
-                write_file(games_dataframe, f'1){prefix} - {raw_platform_name} - Games.txt')
-                write_file(
-                    games_alternate_titles_dataframe,
-                    f'2){prefix} - {raw_platform_name} - Alternate titles.txt',
-                )
-                write_file(genres_dataframe, f'3){prefix} - {raw_platform_name} - Genres.txt')
-                write_file(
-                    attributes_dataframe, f'4){prefix} - {raw_platform_name} - Attributes.txt'
-                )
-                write_file(releases_dataframe, f'5){prefix} - {raw_platform_name} - Releases.txt')
-                write_file(
-                    product_codes_dataframe, f'6){prefix} - {raw_platform_name} - Product codes.txt'
-                )
-                write_file(patches_dataframe, f'7){prefix} - {raw_platform_name} - Patches.txt')
-                write_file(ratings_dataframe, f'8){prefix} - {raw_platform_name} - Ratings.txt')
+                if len(games_alternate_titles_dataframe.index) > 0:
+                    write_file(
+                        games_alternate_titles_dataframe,
+                        f'{prefix}{raw_platform_name} - Alternate titles.txt',
+                    )
+
+                if len(genres_dataframe.index) > 0:
+                    write_file(genres_dataframe, f'{prefix}{raw_platform_name} - Genres.txt')
+
+                if len(attributes_dataframe.index) > 0:
+                    write_file(
+                        attributes_dataframe, f'{prefix}{raw_platform_name} - Attributes.txt'
+                    )
+
+                if len(releases_dataframe.index) > 0:
+                    write_file(releases_dataframe, f'{prefix}{raw_platform_name} - Releases.txt')
+
+                if len(product_codes_dataframe.index) > 0:
+                    write_file(
+                        product_codes_dataframe, f'{prefix}{raw_platform_name} - Product codes.txt'
+                    )
+
+                if len(patches_dataframe.index) > 0:
+                    write_file(patches_dataframe, f'{prefix}{raw_platform_name} - Patches.txt')
+
+                if len(ratings_dataframe.index) > 0:
+                    write_file(ratings_dataframe, f'{prefix}{raw_platform_name} - Ratings.txt')
 
                 eprint(
                     f'{Font.success}Finished processing titles. Writing output files... '

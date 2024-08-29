@@ -187,7 +187,7 @@ Flags that can be used with `--games`:
 * If the internet drops, you need to manually restart MobyDump. At this stage it's unclear
   why, but an auto-retry crashes MobyDump in this situation.
 
-* Memory usage can get as high as ~900MB when processing the Windows platform dataset.
+* Memory usage can get as high as ~1GB when processing the Windows platform dataset.
   Given MobyDump's limited use-case and audience, and the abundance of RAM on modern PCs,
   it's not worth optimizing this at this stage.
 

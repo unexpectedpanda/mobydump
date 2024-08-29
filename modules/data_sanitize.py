@@ -38,4 +38,16 @@ def sanitize_dataframes(df: pd.core.frame.DataFrame) -> pd.core.frame.DataFrame:
     # Normalize problem chacters in column headings
     df.columns = df.columns.str.replace('[.|/]', '_', regex=True)
 
+    # Because Microsoft Access is terrible with dates, let alone partial dates, create a
+    # year column so date queries are easier
+    if 'releases_release_date' in df:
+        df['releases_release_year'] = df['releases_release_date'].replace(
+            '(\\d{4}).*', '\\1', regex=True
+        )
+        df.insert(
+            df.columns.get_loc('releases_release_date') + 1,
+            'releases_release_year',
+            df.pop('releases_release_year'),
+        )
+
     return df

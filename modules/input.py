@@ -74,19 +74,17 @@ def user_input() -> argparse.Namespace:
         '--prefix',
         metavar='"<PREFIX>"',
         type=str,
-        help=f'R|The prefix to add to the output files. Ignored if filetype'
-        f'\nis set to {Font.b}JSON{Font.be}. When not specified, defaults to nothing.'
-        '\nBy default, the output files are named as follows:'
-        f'\n\n• {Font.b}1) Platform name - Games.txt{Font.be}'
-        f'\n• {Font.b}2) Platform name - Alternate titles.txt{Font.be}'
-        f'\n• {Font.b}3) Platform name - Genres.txt{Font.be}'
-        f'\n• {Font.b}4) Platform name - Attributes.txt{Font.be}'
-        f'\n• {Font.b}5) Platform name - Releases.txt{Font.be}'
-        f'\n• {Font.b}6) Platform name - Patches.txt{Font.be}'
-        f'\n• {Font.b}7) Platform name - Product codes.txt{Font.be}'
-        f'\n• {Font.b}8) Platform name - Ratings.txt{Font.be}'
-        '\n\nIf a prefix is specified, it\'s inserted between the number and the'
-        '\nplatform name.'
+        help=f'R|The prefix to add to the beginning of output filenames. When not'
+        '\nspecified, defaults to nothing. By default, the output files are'
+        '\nnamed as follows:'
+        f'\n\n• {Font.b}Platform name - (Primary) Games.txt{Font.be}'
+        f'\n• {Font.b}Platform name - Alternate titles.txt{Font.be}'
+        f'\n• {Font.b}Platform name - Genres.txt{Font.be}'
+        f'\n• {Font.b}Platform name - Attributes.txt{Font.be}'
+        f'\n• {Font.b}Platform name - Releases.txt{Font.be}'
+        f'\n• {Font.b}Platform name - Patches.txt{Font.be}'
+        f'\n• {Font.b}Platform name - Product codes.txt{Font.be}'
+        f'\n• {Font.b}Platform name - Ratings.txt{Font.be}'
         '\n\n',
     )
 
