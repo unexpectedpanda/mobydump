@@ -94,7 +94,8 @@ def user_input() -> argparse.Namespace:
         metavar='<SECONDS_PER_REQUEST>',
         type=int,
         help=f'R|How many seconds to wait between requests. When not specified,'
-        f'\ndefaults to {Font.b}10{Font.be}. Choose a number from the following list:'
+        f'\ndefaults to {Font.b}10{Font.be}. Overrides the {Font.b}MOBY_RATE{Font.be} environment variable.'
+        '\nChoose a number from the following list:'
         '\n\n10 - MobyGames non-commercial free API key'
         '\n5  - MobyPro non-commercial API key'
         '\n\nUse lower numbers at your own risk. Unless you have an'

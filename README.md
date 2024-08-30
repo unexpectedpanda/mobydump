@@ -165,7 +165,8 @@ Flags that can be used with `--games`:
 
   -r <SECONDS_PER_REQUEST>, --ratelimit <SECONDS_PER_REQUEST>
                         How many seconds to wait between requests. When not specified,
-                        defaults to 10. Choose a number from the following list:
+                        defaults to 10. Overrides the MOBY_RATE environment variable.
+                        Choose a number from the following list:
 
                         10 - MobyGames non-commercial free API key
                         5  - MobyPro non-commercial API key
