@@ -26,7 +26,7 @@ def api_request(
         requests.models.Response: The response from the MobyGames API.
     """
     try:
-        eprint(message)
+        eprint(message, wrap=False)
 
         response = requests.get(url, headers=headers)
 
@@ -43,8 +43,7 @@ def api_request(
             level='error',
             indent=False,
         )
-        request_retry(url, headers, message, timeout, 'MOTHERFUCKING INTERNET')
-        # sys.exit(1)
+        sys.exit(1)
     except requests.exceptions.HTTPError as err:
         if err.response.status_code == 401:
             eprint(
