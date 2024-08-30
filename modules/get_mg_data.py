@@ -46,7 +46,6 @@ def get_games(
         rate_limit (int): The rate limit in seconds per request.
         headers (dict[str, str]): The headers to use in the API request.
     """
-
     now: datetime.datetime
 
     eprint(f'{Font.b}{Font.u}Stage 1{Font.end}')
@@ -60,13 +59,9 @@ def get_games(
     offset: int = 0
     offset_increment: int = 100
 
-    # Read the game cache file if it exists
-    game_cache: dict[str, Any] = read_game_cache(platform_id)
-
-    # Change the offset if we need to resume
-    if game_cache and not completion_status['stage_1_finished']:
-        # Get the last key in the cache, and set the offset appropriately
-        offset = int(list(game_cache)[-1]) + offset_increment
+    # Figure out the last offset's data that has been cached
+    for game_file in pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'):
+        offset = int(game_file.stem) + offset_increment
 
         eprint(f'• Request was previously interrupted, resuming from offset {offset}')
 
@@ -84,7 +79,11 @@ def get_games(
 
         if not completion_status['stage_1_finished']:
             # Make the request for the platform's games
-            now = datetime.datetime.now()
+            now = (
+                datetime.datetime.now(tz=datetime.timezone.utc)
+                .replace(tzinfo=datetime.timezone.utc)
+                .astimezone(tz=None)
+            )
 
             game_dict: dict[str, Any] = api_request(
                 f'https://api.mobygames.com/v1/games?api_key={api_key}&platform={platform_id}&offset={offset}&limit={offset_increment}',
@@ -92,18 +91,17 @@ def get_games(
                 message=f'• [{now.strftime("%H:%M:%S")}] Requesting titles {offset}-{offset+offset_increment}...',
             ).json()
 
-            # Add games to the cache, and then process them
-            if 'games' in game_dict:
-                if game_dict['games']:
-                    game_cache[str(offset)] = game_dict
-
             # Increment the offset
             offset = offset + offset_increment
 
             # Break the loop if MobyGames returns an empty response or if there's less than 100 titles, as we've
             # reached the end
             if 'games' in game_dict:
-                now = datetime.datetime.now()
+                now = (
+                    datetime.datetime.now(tz=datetime.timezone.utc)
+                    .replace(tzinfo=datetime.timezone.utc)
+                    .astimezone(tz=None)
+                )
 
                 eprint(
                     f'• [{now.strftime("%H:%M:%S")}] Requesting titles {offset-offset_increment}-{offset}... done.\n',
@@ -122,15 +120,17 @@ def get_games(
 
         # Write the cache
         with open(
-            pathlib.Path(f'cache/{platform_id}/games.json'), 'w', encoding='utf-8'
+            pathlib.Path(f'cache/{platform_id}/games/{offset-offset_increment!s}.json'),
+            'w',
+            encoding='utf-8',
         ) as platform_request_cache:
-            platform_request_cache.write(json.dumps(game_cache, indent=4))
+            platform_request_cache.write(json.dumps(game_dict, indent=2, ensure_ascii=False))
 
         # Write the completion status
         with open(
             pathlib.Path(f'cache/{platform_id}/status.json'), 'w', encoding='utf-8'
         ) as status_cache:
-            status_cache.write(json.dumps(completion_status, indent=4))
+            status_cache.write(json.dumps(completion_status, indent=2))
 
         # End the loop if needed
         if end_loop:
@@ -138,7 +138,6 @@ def get_games(
 
 
 def get_game_details(
-    games: list[dict[str, Any]],
     platform_id: int,
     completion_status: dict[str, bool],
     api_key: str,
@@ -156,7 +155,6 @@ def get_game_details(
         rate_limit (int): The rate limit in seconds per request.
         headers (dict[str, str]): The headers to use in the API request.
     """
-
     now: datetime.datetime
 
     eprint(
@@ -164,32 +162,70 @@ def get_game_details(
         indent=False,
     )
 
-    # Only download game details that haven't been downloaded yet
-    for i, game in enumerate(games, start=1):
-        if not pathlib.Path(f'cache/{platform_id}/games-platform/{game['game_id']}.json').is_file():
-            now = datetime.datetime.now()
+    # Get the game count
+    files: list[pathlib.Path] = list(pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'))
+    file_count: int = len(files)
+    game_count: int = file_count * 100 - 100
 
-            game_details: dict[str, Any] = api_request(
-                f'https://api.mobygames.com/v1/games/{game['game_id']}/platforms/{platform_id}?api_key={api_key}',
-                headers,
-                message=f'• [{now.strftime("%H:%M:%S")}] Requesting details for {game['title']} [ID: {game['game_id']}] ({i:,}/{len(games):,})...',
-            ).json()
+    for i, game_file in enumerate(files):
+        if i + 1 == file_count:
+            with open(pathlib.Path(game_file), encoding='utf-8') as platform_request_cache:
+                cache: dict[str, Any] = json.loads(platform_request_cache.read())
 
-            with open(
-                pathlib.Path(f'cache/{platform_id}/games-platform/{game['game_id']}.json'),
-                'w',
-                encoding='utf-8',
-            ) as game_details_cache:
-                game_details_cache.write(json.dumps(game_details, indent=4))
+                game_count = game_count + len(cache['games'])
 
-            now = datetime.datetime.now()
+    game_iterator: int = 0
 
-            eprint(
-                f'• [{now.strftime("%H:%M:%S")}] Requesting details for {game['title']} [ID: {game['game_id']}] ({i:,}/{len(games):,})... done.\n',
-                overwrite=True, wrap=False,
-            )
+    for game_file in pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'):
 
-            request_wait(rate_limit)
+        # Get the game IDs to download details for
+        games: list[tuple[int, str]] = []
+
+        with open(pathlib.Path(game_file), encoding='utf-8') as platform_request_cache:
+            cache: dict[str, Any] = json.loads(platform_request_cache.read())
+
+            games = get_game_ids_and_titles(cache)
+
+        # Only download game details that haven't been downloaded yet
+        for game in games:
+            game_iterator += 1
+
+            game_id = game[0]
+            game_title = game[1]
+
+            if not pathlib.Path(f'cache/{platform_id}/games-details/{game_id}.json').is_file():
+                now = (
+                    datetime.datetime.now(tz=datetime.timezone.utc)
+                    .replace(tzinfo=datetime.timezone.utc)
+                    .astimezone(tz=None)
+                )
+
+                game_details: dict[str, Any] = api_request(
+                    f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform_id}?api_key={api_key}',
+                    headers,
+                    message=f'• [{now.strftime("%H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})...',
+                ).json()
+
+                with open(
+                    pathlib.Path(f'cache/{platform_id}/games-details/{game_id}.json'),
+                    'w',
+                    encoding='utf-8',
+                ) as game_details_cache:
+                    game_details_cache.write(json.dumps(game_details, indent=2, ensure_ascii=False))
+
+                now = (
+                    datetime.datetime.now(tz=datetime.timezone.utc)
+                    .replace(tzinfo=datetime.timezone.utc)
+                    .astimezone(tz=None)
+                )
+
+                eprint(
+                    f'• [{now.strftime("%H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})... done.\n',
+                    overwrite=True,
+                    wrap=False,
+                )
+
+                request_wait(rate_limit)
 
     # Write the completion status
     completion_status['stage_2_finished'] = True
@@ -197,7 +233,36 @@ def get_game_details(
     with open(
         pathlib.Path(f'cache/{platform_id}/status.json'), 'w', encoding='utf-8'
     ) as status_cache:
-        status_cache.write(json.dumps(completion_status, indent=4))
+        status_cache.write(json.dumps(completion_status, indent=2))
+
+
+def get_game_ids_and_titles(cache: dict[str, Any]) -> list[tuple[int, str]]:
+    """
+    Extracts game IDs and titles from a cache file.
+
+    Args:
+        cache (dict[str, Any]): A MobyDump cache file.
+
+    Returns:
+        list[tuple[int, str]]: Game IDs and titles.
+    """
+    games: list[tuple[int, str]] = []
+
+    for cached_game in cache['games']:
+        game_id: int = 0
+        game_title: str = ''
+
+        for key, value in cached_game.items():
+            if key == 'game_id':
+                game_id = value
+            elif key == 'title':
+                game_title = value
+
+            if game_id and game_title:
+                games.append((game_id, game_title))
+                break
+
+    return games
 
 
 def get_platforms(api_key, headers) -> dict[str, list[dict[str, str | int]]]:
@@ -224,27 +289,6 @@ def get_platforms(api_key, headers) -> dict[str, list[dict[str, str | int]]]:
         pathlib.Path('cache').mkdir(parents=True, exist_ok=True)
 
     with open(pathlib.Path('cache/platforms.json'), 'w', encoding='utf-8') as platform_cache:
-        platform_cache.write(json.dumps(platforms, indent=4))
+        platform_cache.write(json.dumps(platforms, indent=2, ensure_ascii=False))
 
     return platforms
-
-
-def read_game_cache(platform_id: int) -> dict[str, Any]:
-    """
-    Reads the game cache file.
-
-    Returns:
-        dict[str, Any]: The game cache in JSON form.
-    """
-    game_cache: dict[str, Any] = {}
-
-    if pathlib.Path(f'cache/{platform_id}/games.json').is_file():
-        with open(
-            pathlib.Path(f'cache/{platform_id}/games.json'), encoding='utf-8'
-        ) as platform_request_cache:
-            try:
-                game_cache = json.load(platform_request_cache)
-            except Exception:
-                pass
-
-    return game_cache

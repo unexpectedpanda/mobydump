@@ -109,7 +109,8 @@ def user_input() -> argparse.Namespace:
         metavar='"<USER_AGENT>"',
         type=str,
         help=f'R|Change the user agent MobyDump supplies when making requests.'
-        f'\nDefaults to {Font.b}MobyDump/{const.__version__}; https://www.retro-exo.com/{Font.be}.'
+        '\nDefaults to:'
+        f'\n{Font.b}MobyDump/{const.__version__}; https://github.com/unexpectedpanda/mobydump{Font.be}.'
         '\n\n',
     )
 

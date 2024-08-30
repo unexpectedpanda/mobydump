@@ -150,21 +150,18 @@ Flags that can be used with `--games`:
                         JSON data is left raw.
 
   -pr "<PREFIX>", --prefix "<PREFIX>"
-                        The prefix to add to the output files. Ignored if filetype
-                        is set to JSON. When not specified, defaults to nothing.
-                        By default, the output files are named as follows:
+                        The prefix to add to the beginning of output filenames. When not
+                        specified, defaults to nothing. By default, the output files are
+                        named as follows:
 
-                        • 1) Platform name - Games.txt
-                        • 2) Platform name - Alternate titles.txt
-                        • 3) Platform name - Genres.txt
-                        • 4) Platform name - Attributes.txt
-                        • 5) Platform name - Releases.txt
-                        • 6) Platform name - Patches.txt
-                        • 7) Platform name - Product codes.txt
-                        • 8) Platform name - Ratings.txt
-
-                        If a prefix is specified, it's inserted between the number and the
-                        platform name.
+                        • Platform name - (Primary) Games.txt
+                        • Platform name - Alternate titles.txt
+                        • Platform name - Genres.txt
+                        • Platform name - Attributes.txt
+                        • Platform name - Releases.txt
+                        • Platform name - Patches.txt
+                        • Platform name - Product codes.txt
+                        • Platform name - Ratings.txt
 
   -r <SECONDS_PER_REQUEST>, --ratelimit <SECONDS_PER_REQUEST>
                         How many seconds to wait between requests. When not specified,
@@ -179,17 +176,14 @@ Flags that can be used with `--games`:
 
   -u "<USER_AGENT>", --useragent "<USER_AGENT>"
                         Change the user agent MobyDump supplies when making requests.
-                        Defaults to MobyDump/0.3; https://www.retro-exo.com/.
+                        Defaults to:
+                        MobyDump/version; https://github.com/unexpectedpanda/mobydump/.
 ```
 
 ## Known limitations
 
 * If the internet drops, you need to manually restart MobyDump. At this stage it's unclear
   why, but an auto-retry crashes MobyDump in this situation.
-
-* Memory usage can get as high as ~1GB when processing the Windows platform dataset.
-  Given MobyDump's limited use-case and audience, and the abundance of RAM on modern PCs,
-  it's not worth optimizing this at this stage.
 
 * There's nothing to stop you setting a lower seconds-per-request than is allowed for
   your API key, or running MobyDump multiple times in parallel. I strongly advise you to
@@ -240,3 +234,8 @@ to import them into Microsoft Access:
         </tr>
       </tbody>
     </table>
+
+In the `Platform name - (Primary) Games` table, set `game_id` as the primary key, and then
+use the relationships view to link the fields between the different tables. If you want,
+you can also link `releases_release_year` in the `Platform name - Releases` and
+`Platform name - Product codes` tables.

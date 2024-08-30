@@ -18,13 +18,7 @@ from dotenv import load_dotenv  # type: ignore
 
 import modules.constants as const
 from modules.data_sanitize import sanitize_dataframes
-from modules.get_mg_data import (
-    add_games,
-    get_game_details,
-    get_games,
-    get_platforms,
-    read_game_cache,
-)
+from modules.get_mg_data import get_game_details, get_game_ids_and_titles, get_games, get_platforms
 from modules.input import user_input
 from modules.requests import request_wait
 from modules.utils import Font, eprint, old_windows
@@ -177,7 +171,8 @@ def main() -> None:
                         raw_platform_name = cached_platform['platform_name']
 
             # Set up the cache folders
-            pathlib.Path(f'cache/{platform_id}/games-platform').mkdir(parents=True, exist_ok=True)
+            pathlib.Path(f'cache/{platform_id}/games').mkdir(parents=True, exist_ok=True)
+            pathlib.Path(f'cache/{platform_id}/games-details').mkdir(parents=True, exist_ok=True)
 
             # Read the requests status file if it exists
             completion_status: dict[str, bool] = {
@@ -211,12 +206,12 @@ def main() -> None:
 
             if resume == 'r':
                 # Delete the game cache file
-                if pathlib.Path(f'cache/{platform_id}/games.json').is_file():
-                    pathlib.Path(f'cache/{platform_id}/games.json').unlink()
+                for game_file in pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'):
+                    game_file.unlink()
 
                 # Delete the game details files
-                for game_details_file in pathlib.Path(f'cache/{platform_id}/games-platform/').glob(
-                    '*.*'
+                for game_details_file in pathlib.Path(f'cache/{platform_id}/games-details/').glob(
+                    '*.json'
                 ):
                     game_details_file.unlink()
 
@@ -242,22 +237,9 @@ def main() -> None:
                     headers,
                 )
 
-            # Repopulate the games list if resuming or writing out from cache
-            games: list[dict[str, Any]] = []
-            game_cache: dict[str, Any] = read_game_cache(platform_id)
-
-            for values in game_cache.values():
-                games = add_games(values, games)
-
-            del game_cache
-
-            # Sort the game list by title, dedupe if necessary
-            games = sorted(games, key=lambda d: d['title'])
-
             # Stage 2: Download individual game details
             if not completion_status['stage_2_finished']:
                 get_game_details(
-                    games,
                     platform_id,
                     completion_status,
                     api_key,
@@ -273,27 +255,58 @@ def main() -> None:
                     indent=False,
                 )
 
-                # Enrich the existing game list with individual game details
-                for game in games:
-                    if pathlib.Path(
-                        f'cache/{platform_id}/games-platform/{game['game_id']}.json'
-                    ).is_file():
-                        with open(
-                            pathlib.Path(
-                                f'cache/{platform_id}/games-platform/{game['game_id']}.json'
-                            ),
-                            encoding='utf-8',
-                        ) as game_details_cache:
-                            loaded_game_details: dict[str, Any] = json.load(game_details_cache)
+                # Enrich games with individual game details, and write to the JSON file
+                for game_file in pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'):
+                    with open(pathlib.Path(game_file), encoding='utf-8') as platform_request_cache:
+                        cache: dict[str, Any] = json.loads(platform_request_cache.read())
 
-                            # Add the remaining keys to the game
-                            for key, values in loaded_game_details.items():
-                                game[key] = values
+                        output_file: str = f'{prefix}{raw_platform_name}.json'
 
-                output_file: str = f'{prefix}{raw_platform_name}.json'
+                        # Open the output JSON file and write the header
+                        with open(pathlib.Path(output_file), 'w', encoding='utf-8-sig') as file:
+                            file.write('{\n  "games": [\n')
 
-                with open(pathlib.Path(output_file), 'w', encoding='utf-8-sig') as file:
-                    file.write(json.dumps(games, indent=2))
+                        # Add the game contents to the file
+                        for i, game in enumerate(cache['games']):
+
+                            if pathlib.Path(
+                                f'cache/{platform_id}/games-details/{game['game_id']}.json'
+                            ).is_file():
+                                with open(
+                                    pathlib.Path(
+                                        f'cache/{platform_id}/games-details/{game['game_id']}.json'
+                                    ),
+                                    encoding='utf-8',
+                                ) as game_details_cache:
+                                    loaded_game_details: dict[str, Any] = json.load(
+                                        game_details_cache
+                                    )
+
+                                    # Add the game details keys to the game
+                                    for key, values in loaded_game_details.items():
+                                        game[key] = values
+
+                                    # Sort by alphabetically by key
+                                    game = dict(sorted(game.items()))
+
+                                    # Move game ID and title to the top
+                                    game = {'game_id': game.pop('game_id'), **game}
+                                    game = {'title': game.pop('title'), **game}
+
+                                    with open(
+                                        pathlib.Path(output_file), 'a', encoding='utf-8-sig'
+                                    ) as file:
+                                        game_json: str = json.dumps(game, indent=2)
+
+                                        if i + 1 < len(cache['games']):
+                                            game_json = f'{game_json},'
+
+                                        for line in game_json.split('\n'):
+                                            file.write(f'    {line}\n')
+
+                        # Close the file
+                        with open(pathlib.Path(output_file), 'a', encoding='utf-8-sig') as file:
+                            file.write('  ]\n}\n')
 
                 eprint(
                     f'{Font.success}Finished processing titles. Writing output file... '
@@ -311,8 +324,24 @@ def main() -> None:
                     indent=False,
                 )
 
+                games: list[dict[str, Any]] = []
+                game_ids_and_titles: list[tuple[int, str]] = []
+
+                for game_file in pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'):
+                    with open(pathlib.Path(game_file), encoding='utf-8') as platform_request_cache:
+                        cache = json.loads(platform_request_cache.read())
+
+                        games.append(cache)
+                        game_ids_and_titles.extend(get_game_ids_and_titles(cache))
+
                 # Handle games data from the platform
-                games_dataframe = pd.json_normalize(data=games, errors='ignore')
+                games_dataframe = pd.json_normalize(
+                    data=games, record_path='games', errors='ignore'
+                )
+                games_dataframe = games_dataframe.sort_values(by=['game_id'])
+
+                # Clear memory
+                del games
 
                 # Drop unwanted data
                 unwanted_columns: list[str] = [
@@ -375,17 +404,17 @@ def main() -> None:
                 # Get individual game details data
                 games_details: list[dict[str, Any]] = []
 
-                for game in games:
-                    if pathlib.Path(
-                        f'cache/{platform_id}/games-platform/{game['game_id']}.json'
-                    ).is_file():
+                for game in game_ids_and_titles:
+                    game_id = game[0]
+
+                    if pathlib.Path(f'cache/{platform_id}/games-details/{game_id}.json').is_file():
                         with open(
-                            pathlib.Path(
-                                f'cache/{platform_id}/games-platform/{game['game_id']}.json'
-                            ),
+                            pathlib.Path(f'cache/{platform_id}/games-details/{game_id}.json'),
                             encoding='utf-8',
                         ) as games_details_cache:
                             games_details.append(json.load(games_details_cache))
+
+                games_details = sorted(games_details, key=lambda x: x['game_id'])
 
                 # Handle attributes
                 attributes_dataframe = pd.json_normalize(
