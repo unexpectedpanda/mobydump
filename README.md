@@ -178,7 +178,7 @@ Flags that can be used with `--games`:
   -u "<USER_AGENT>", --useragent "<USER_AGENT>"
                         Change the user agent MobyDump supplies when making requests.
                         Defaults to:
-                        MobyDump/version; https://github.com/unexpectedpanda/mobydump/.
+                        MobyDump/version; https://github.com/unexpectedpanda/mobydump/
 ```
 
 ## Known limitations
