@@ -13,6 +13,7 @@ import pathlib
 import sys
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from dotenv import load_dotenv  # type: ignore
 
@@ -324,24 +325,27 @@ def main() -> None:
                     indent=False,
                 )
 
-                games: list[dict[str, Any]] = []
-                game_ids_and_titles: list[tuple[int, str]] = []
+                game_ids: list[int] = []
+                games_dataframe: pd.DataFrame = pd.DataFrame()
 
                 for game_file in pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'):
                     with open(pathlib.Path(game_file), encoding='utf-8') as platform_request_cache:
                         cache = json.loads(platform_request_cache.read())
 
-                        games.append(cache)
-                        game_ids_and_titles.extend(get_game_ids_and_titles(cache))
+                        game_ids.extend([x[0] for x in get_game_ids_and_titles(cache)])
+                        temp_games_data_frame = pd.json_normalize(
+                            data=cache, record_path='games', errors='ignore'
+                        )
 
-                # Handle games data from the platform
-                games_dataframe = pd.json_normalize(
-                    data=games, record_path='games', errors='ignore'
-                )
+                        # Remove null values so there aren't datatype concat problems
+                        temp_games_data_frame = temp_games_data_frame.replace([None, np.nan], '')
+
+                        if games_dataframe.empty:
+                            games_dataframe = temp_games_data_frame.copy(deep=True)
+                        else:
+                            games_dataframe = pd.concat([games_dataframe, temp_games_data_frame])
+
                 games_dataframe = games_dataframe.sort_values(by=['game_id'])
-
-                # Clear memory
-                del games
 
                 # Drop unwanted data
                 unwanted_columns: list[str] = [
@@ -404,9 +408,7 @@ def main() -> None:
                 # Get individual game details data
                 games_details: list[dict[str, Any]] = []
 
-                for game in game_ids_and_titles:
-                    game_id = game[0]
-
+                for game_id in game_ids:
                     if pathlib.Path(f'cache/{platform_id}/games-details/{game_id}.json').is_file():
                         with open(
                             pathlib.Path(f'cache/{platform_id}/games-details/{game_id}.json'),
