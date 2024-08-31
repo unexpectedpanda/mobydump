@@ -19,7 +19,13 @@ from dotenv import load_dotenv  # type: ignore
 
 import modules.constants as const
 from modules.data_sanitize import sanitize_dataframes
-from modules.get_mg_data import get_game_details, get_game_ids_and_titles, get_games, get_platforms
+from modules.get_mg_data import (
+    delete_cache,
+    get_game_details,
+    get_game_ids_and_titles,
+    get_games,
+    get_platforms,
+)
 from modules.input import user_input
 from modules.requests import request_wait
 from modules.utils import Font, eprint, old_windows
@@ -143,6 +149,8 @@ def main() -> None:
                 if delimiter.startswith('\\'):
                     delimiter = encoded_delimiter
 
+                # Microsoft Access only really likes ASCII delimiters and so does Pandas' to_csv function,
+                # so limit characters to single byte
                 if len(encoded_delimiter) > 1:
                     eprint(
                         f'Delimiter is more than one byte long in unicode ({delimiter} = '
@@ -205,27 +213,8 @@ def main() -> None:
                     resume = input('\n> ')
                     eprint('')
 
-            if resume == 'r':
-                # Delete the game cache file
-                for game_file in pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'):
-                    game_file.unlink()
-
-                # Delete the game details files
-                for game_details_file in pathlib.Path(f'cache/{platform_id}/games-details/').glob(
-                    '*.json'
-                ):
-                    game_details_file.unlink()
-
-                # Rewrite the status file
-                completion_status = {
-                    'stage_1_finished': False,
-                    'stage_2_finished': False,
-                }
-
-                with open(
-                    pathlib.Path(f'cache/{platform_id}/status.json'), 'w', encoding='utf-8'
-                ) as status_cache:
-                    status_cache.write(json.dumps(completion_status, indent=4))
+            if resume == 'r' or args.forcerestart:
+                completion_status = delete_cache(platform_id)
 
             # Stage 1: Download games for the platform
             if not completion_status['stage_1_finished']:

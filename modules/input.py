@@ -70,6 +70,15 @@ def user_input() -> argparse.Namespace:
     )
 
     game_options.add_argument(
+        '-fr',
+        '--forcerestart',
+        action='store_true',
+        help='R|Don\'t resume from where MobyDump last left off. Instead, restart the'
+        '\nrequest process from MobyGames. This deletes your cached files.'
+        '\n\n',
+    )
+
+    game_options.add_argument(
         '-pr',
         '--prefix',
         metavar='"<PREFIX>"',

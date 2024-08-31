@@ -27,6 +27,38 @@ def add_games(games_dict: dict[str, Any], games: list[dict[str, Any]]) -> list[d
     return games
 
 
+def delete_cache(platform_id: int) -> dict[str, bool]:
+    """
+    Deletes the local cache for a downloaded platform.
+
+    Args:
+        platform_id (int): The MobyGames platform ID to delete downloaded data for.
+
+    Returns:
+        dict[str, bool]: A reset completion status.
+    """
+    # Delete the game cache file
+    for game_file in pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'):
+        game_file.unlink()
+
+    # Delete the game details files
+    for game_details_file in pathlib.Path(f'cache/{platform_id}/games-details/').glob('*.json'):
+        game_details_file.unlink()
+
+    # Rewrite the status file
+    completion_status = {
+        'stage_1_finished': False,
+        'stage_2_finished': False,
+    }
+
+    with open(
+        pathlib.Path(f'cache/{platform_id}/status.json'), 'w', encoding='utf-8'
+    ) as status_cache:
+        status_cache.write(json.dumps(completion_status, indent=2))
+
+    return completion_status
+
+
 def get_games(
     platform_id: int,
     platform_name: str,
@@ -63,7 +95,7 @@ def get_games(
     for game_file in pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'):
         offset = int(game_file.stem) + offset_increment
 
-        eprint(f'• Request was previously interrupted, resuming from offset {offset}')
+        eprint(f'• Requests were previously interrupted, resuming from offset {offset}')
 
     # Get all the response pages for a platform, and add the games to a list
     i: int = 0
@@ -161,6 +193,10 @@ def get_game_details(
         f'\n{Font.b}{Font.u}Stage 2{Font.end}\nGetting attributes, patches, ratings, and releases for each game.\n',
         indent=False,
     )
+
+    # Show a resume message if needed
+    if list(pathlib.Path(f'cache/{platform_id}/games-details/').glob('*.json')):
+        eprint('• Requests were previously interrupted, resuming...')
 
     # Get the game count
     files: list[pathlib.Path] = list(pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'))

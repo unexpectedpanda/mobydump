@@ -149,6 +149,9 @@ Flags that can be used with `--games`:
                         Delimiter separated value files are sanitized for problem characters,
                         JSON data is left raw.
 
+  -fr, --forcerestart   Don't resume from where MobyDump last left off. Instead, restart the
+                        request process from MobyGames. This deletes your cached files.
+
   -pr "<PREFIX>", --prefix "<PREFIX>"
                         The prefix to add to the beginning of output filenames. When not
                         specified, defaults to nothing. By default, the output files are
@@ -178,7 +181,7 @@ Flags that can be used with `--games`:
   -u "<USER_AGENT>", --useragent "<USER_AGENT>"
                         Change the user agent MobyDump supplies when making requests.
                         Defaults to:
-                        MobyDump/version; https://github.com/unexpectedpanda/mobydump/
+                        MobyDump/version; https://github.com/unexpectedpanda/mobydump
 ```
 
 ## Known limitations
