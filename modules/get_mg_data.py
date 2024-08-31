@@ -203,7 +203,7 @@ def get_game_details(
                 game_details: dict[str, Any] = api_request(
                     f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform_id}?api_key={api_key}',
                     headers,
-                    message=f'• [{now.strftime("%H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})...',
+                    message=f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})...',
                 ).json()
 
                 with open(
@@ -220,7 +220,7 @@ def get_game_details(
                 )
 
                 eprint(
-                    f'• [{now.strftime("%H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})... done.\n',
+                    f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})... done.\n',
                     overwrite=True,
                     wrap=False,
                 )
