@@ -7,6 +7,44 @@ import textwrap
 from typing import Any
 
 
+class Config:
+    def __init__(
+        self,
+        args: argparse.Namespace,
+        api_key: str,
+        rate_limit: int,
+        headers: dict[str, str],
+        output_file_type: int,
+        output_path: str,
+        prefix: str,
+        delimiter: str,
+    ) -> None:
+        """
+        Creates an object that contains internal config data.
+
+        Args:
+            args (argparse.Namespace): The arguments passed in by the user.
+            api_key (str): The MobyGames API key.
+            rate_limit (int): The rate limit in seconds per request.
+            headers (dict[str, str]): The headers to use in the API request.
+            output_file_type (int): The type of file to output to. Options are:
+                0 - Don't output files
+                1 - Delimiter separated value
+                2 - JSON
+            output_path (str): The folder to write output files to.
+            prefix (str): The prefix to add to the beginning of output filenames.
+            delimiter (str): The single character delimiter to use in the output files.
+        """
+        self.args = args
+        self.api_key = api_key
+        self.rate_limit = rate_limit
+        self.headers = headers
+        self.output_file_type = output_file_type
+        self.output_path = output_path
+        self.prefix = prefix
+        self.delimiter = delimiter
+
+
 def enable_vt_mode() -> Any:
     """
     Turns on VT-100 emulation mode for Windows, allowing things like colors.

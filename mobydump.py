@@ -6,29 +6,27 @@ a delimiter-separated value file or JSON.
 
 https://github.com/unexpectedpanda/mobydump
 """
+import datetime
 import html
 import json
 import os
 import pathlib
 import sys
-from typing import Any
 
-import numpy as np
-import pandas as pd
 from dotenv import load_dotenv  # type: ignore
 
 import modules.constants as const
-from modules.data_sanitize import sanitize_dataframes
 from modules.get_mg_data import (
     delete_cache,
     get_game_details,
-    get_game_ids_and_titles,
     get_games,
     get_platforms,
+    get_updates,
+    write_output_files,
 )
 from modules.input import user_input
 from modules.requests import request_wait
-from modules.utils import Font, eprint, old_windows
+from modules.utils import Config, Font, eprint, old_windows
 
 # Enable VT100 escape sequence for Windows 10+
 if not old_windows() and sys.platform.startswith('win'):
@@ -77,15 +75,71 @@ def main() -> None:
         if args.useragent:
             user_agent = str(args.useragent)
 
+        # Set the rate limit
+        rate_limit: int = 10
+
+        if os.getenv('MOBY_RATE'):
+            rate_limit = int(os.getenv('MOBY_RATE'))  # type: ignore
+
+        if args.ratelimit:
+            rate_limit = args.ratelimit
+
+        # Set the output file type
+        output_file_type: int = 1
+
+        if args.output is not None:
+            output_file_type = args.output
+
+        # Set the output path
+        output_path: str = ''
+
+        if args.path:
+            output_path = args.path
+            pathlib.Path(output_path).mkdir(parents=True, exist_ok=True)
+
+        # Set the prefix
+        prefix: str = ''
+
+        if args.prefix:
+            prefix = args.prefix
+
+        # Set the delimiter
+        delimiter: str = '\t'
+
+        if args.delimiter:
+            delimiter = args.delimiter
+
+            encoded_delimiter: str = bytearray(delimiter, encoding='utf-8').decode('unicode_escape')
+
+            # Deal with escaped characters like \t
+            if delimiter.startswith('\\'):
+                delimiter = encoded_delimiter
+
+            # Microsoft Access only really likes ASCII delimiters and so does Pandas' to_csv function,
+            # so limit characters to single byte
+            if len(encoded_delimiter) > 1:
+                eprint(
+                    f'Delimiter is more than one byte long in unicode ({delimiter} = '
+                    f'{delimiter.encode('utf-8')!r}). Choose another character. Exiting...',
+                    level='error',
+                    indent=0,
+                )
+                sys.exit(1)
+
         # Set the request headers
         headers: dict[str, str] = {'Accept': 'application/json', 'User-Agent': user_agent}
+
+        # Create the config object instance
+        config: Config = Config(
+            args, api_key, rate_limit, headers, output_file_type, output_path, prefix, delimiter
+        )
 
         # ================================================================================
         # Get platforms if requested by the user
         # ================================================================================
 
         if args.platforms:
-            platforms = get_platforms(api_key, headers)
+            platforms = get_platforms(config)
 
             # Sort the response by name
             platform_list: list[dict[str, str | int]] = sorted(
@@ -114,59 +168,13 @@ def main() -> None:
             # Set the platform
             platform_id: int = args.games
 
-            # Set the rate limit
-            rate_limit: int = 10
-
-            if os.getenv('MOBY_RATE'):
-                rate_limit = int(os.getenv('MOBY_RATE'))  # type: ignore
-
-            if args.ratelimit:
-                rate_limit = args.ratelimit
-
-            # Set the output file type
-            output_file_type: int = 1
-
-            if args.filetype:
-                output_file_type = args.filetype
-
-            # Set the prefix
-            prefix: str = ''
-
-            if args.prefix:
-                prefix = args.prefix
-
-            # Set the delimiter
-            delimiter: str = '\t'
-
-            if args.delimiter:
-                delimiter = args.delimiter
-
-                encoded_delimiter: str = bytearray(delimiter, encoding='utf-8').decode(
-                    'unicode_escape'
-                )
-
-                # Deal with escaped characters like \t
-                if delimiter.startswith('\\'):
-                    delimiter = encoded_delimiter
-
-                # Microsoft Access only really likes ASCII delimiters and so does Pandas' to_csv function,
-                # so limit characters to single byte
-                if len(encoded_delimiter) > 1:
-                    eprint(
-                        f'Delimiter is more than one byte long in unicode ({delimiter} = '
-                        f'{delimiter.encode('utf-8')!r}). Choose another character. Exiting...',
-                        level='error',
-                        indent=0,
-                    )
-                    sys.exit(1)
-
             # Get the platform name if we know it already
             platform_name: str = f'platform {platform_id!s}'
             raw_platform_name: str = ''
 
             if not pathlib.Path('cache/platforms.json').is_file():
-                get_platforms(api_key, headers)
-                request_wait(rate_limit)
+                get_platforms(config)
+                request_wait(config.rate_limit)
 
             with open(pathlib.Path('cache/platforms.json'), encoding='utf-8') as platform_cache:
                 cached_platforms = json.load(platform_cache)
@@ -184,9 +192,16 @@ def main() -> None:
             pathlib.Path(f'cache/{platform_id}/games-details').mkdir(parents=True, exist_ok=True)
 
             # Read the requests status file if it exists
-            completion_status: dict[str, bool] = {
+            now = (
+                datetime.datetime.now(tz=datetime.timezone.utc)
+                .replace(tzinfo=datetime.timezone.utc)
+                .astimezone(tz=None)
+            )
+
+            completion_status: dict[str, bool | str] = {
                 'stage_1_finished': False,
                 'stage_2_finished': False,
+                'last_updated': now.strftime("%Y/%m/%d"),
             }
 
             if pathlib.Path(f'cache/{platform_id}/status.json').is_file():
@@ -202,314 +217,43 @@ def main() -> None:
             # cache.
             resume: str = ''
 
-            if completion_status['stage_1_finished'] and completion_status['stage_2_finished']:
-                while resume != 'r' and resume != 'w':
-                    eprint(
-                        f'\nGames from {platform_name} have already been downloaded. Do you want to redownload (r), or '
-                        'write new output files from cache (w)?',
-                        level='warning',
-                        indent=False,
-                    )
-                    resume = input('\n> ')
-                    eprint('')
+            if not args.forcerestart:
+                if completion_status['stage_1_finished'] and completion_status['stage_2_finished']:
+                    while resume != 'r' and resume != 'w' and resume != 'q':
+                        eprint(
+                            f'\nGames from {platform_name} have already been downloaded. Do you want to redownload (r), '
+                            'write new output files from cache (w), or exit (q)?',
+                            level='warning',
+                            indent=0,
+                        )
+                        resume = input('\n> ')
+                        eprint('')
 
             if resume == 'r' or args.forcerestart:
                 completion_status = delete_cache(platform_id)
+            elif resume == 'q':
+                sys.exit()
 
             # Stage 1: Download games for the platform
             if not completion_status['stage_1_finished']:
-                get_games(
-                    platform_id,
-                    platform_name,
-                    completion_status,
-                    api_key,
-                    rate_limit,
-                    headers,
-                )
+                get_games(platform_id, platform_name, completion_status, config)
 
             # Stage 2: Download individual game details
             if not completion_status['stage_2_finished']:
-                get_game_details(
-                    platform_id,
-                    completion_status,
-                    api_key,
-                    rate_limit,
-                    headers,
-                )
+                get_game_details(platform_id, completion_status, config)
 
-            if output_file_type == 2:
-                # Write the output file in JSON
-                eprint(
-                    f'\n{Font.success}Finished processing titles. Writing output file...'
-                    f'{Font.end}',
-                    indent=False,
-                )
+            # Write the output files
+            write_output_files(config, platform_id, raw_platform_name)
 
-                # Enrich games with individual game details, and write to the JSON file
-                for game_file in pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'):
-                    with open(pathlib.Path(game_file), encoding='utf-8') as platform_request_cache:
-                        cache: dict[str, Any] = json.loads(platform_request_cache.read())
+        # ================================================================================
+        # Get updates if requested by the user
+        # ================================================================================
 
-                        output_file: str = f'{prefix}{raw_platform_name}.json'
+        # Set up the cache folder
+        pathlib.Path('cache/updates').mkdir(parents=True, exist_ok=True)
 
-                        # Open the output JSON file and write the header
-                        with open(pathlib.Path(output_file), 'w', encoding='utf-8-sig') as file:
-                            file.write('{\n  "games": [\n')
-
-                        # Add the game contents to the file
-                        for i, game in enumerate(cache['games']):
-
-                            if pathlib.Path(
-                                f'cache/{platform_id}/games-details/{game['game_id']}.json'
-                            ).is_file():
-                                with open(
-                                    pathlib.Path(
-                                        f'cache/{platform_id}/games-details/{game['game_id']}.json'
-                                    ),
-                                    encoding='utf-8',
-                                ) as game_details_cache:
-                                    loaded_game_details: dict[str, Any] = json.load(
-                                        game_details_cache
-                                    )
-
-                                    # Add the game details keys to the game
-                                    for key, values in loaded_game_details.items():
-                                        game[key] = values
-
-                                    # Sort by alphabetically by key
-                                    game = dict(sorted(game.items()))
-
-                                    # Move game ID and title to the top
-                                    game = {'game_id': game.pop('game_id'), **game}
-                                    game = {'title': game.pop('title'), **game}
-
-                                    with open(
-                                        pathlib.Path(output_file), 'a', encoding='utf-8-sig'
-                                    ) as file:
-                                        game_json: str = json.dumps(game, indent=2)
-
-                                        if i + 1 < len(cache['games']):
-                                            game_json = f'{game_json},'
-
-                                        for line in game_json.split('\n'):
-                                            file.write(f'    {line}\n')
-
-                        # Close the file
-                        with open(pathlib.Path(output_file), 'a', encoding='utf-8-sig') as file:
-                            file.write('  ]\n}\n')
-
-                eprint(
-                    f'{Font.success}Finished processing titles. Writing output file... '
-                    f'done.{Font.end}',
-                    overwrite=True,
-                    wrap=False,
-                )
-
-            elif output_file_type == 1:
-                # Organize the data into separate tables for output, as Access can't
-                # handle more than 255 columns of data, and the API returns data of
-                # different shapes
-                eprint(
-                    '• Organizing game data...',
-                    indent=False,
-                )
-
-                game_ids: list[int] = []
-                games_dataframe: pd.DataFrame = pd.DataFrame()
-
-                for game_file in pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'):
-                    with open(pathlib.Path(game_file), encoding='utf-8') as platform_request_cache:
-                        cache = json.loads(platform_request_cache.read())
-
-                        game_ids.extend([x[0] for x in get_game_ids_and_titles(cache)])
-                        temp_games_data_frame = pd.json_normalize(
-                            data=cache, record_path='games', errors='ignore'
-                        )
-
-                        # Remove null values so there aren't datatype concat problems
-                        temp_games_data_frame = temp_games_data_frame.replace([None, np.nan], '')
-
-                        if games_dataframe.empty:
-                            games_dataframe = temp_games_data_frame.copy(deep=True)
-                        else:
-                            games_dataframe = pd.concat([games_dataframe, temp_games_data_frame])
-
-                games_dataframe = games_dataframe.sort_values(by=['game_id'])
-
-                # Drop unwanted data
-                unwanted_columns: list[str] = [
-                    'moby_score',
-                    'num_votes',
-                    'platforms',
-                    'sample_cover',
-                    'sample_cover.platforms',
-                    'sample_cover.height',
-                    'sample_cover.image',
-                    'sample_cover.thumbnail_image',
-                    'sample_cover.width',
-                    'sample_screenshots',
-                ]
-
-                for column in unwanted_columns:
-                    try:
-                        games_dataframe.pop(column)
-                    except Exception:
-                        pass
-
-                # Expand columns that need it
-                games_dataframe.insert(0, 'game_id', games_dataframe.pop('game_id'))
-                games_dataframe.insert(1, 'title', games_dataframe.pop('title'))
-
-                # Split out alternate titles into their own dataframe
-                games_alternate_titles_dataframe = games_dataframe.filter(
-                    ['alternate_titles', 'game_id']
-                )
-                games_dataframe.pop('alternate_titles')
-
-                # Expand alternate titles and add the game ID
-                games_alternate_titles_dataframe = games_alternate_titles_dataframe.explode(
-                    'alternate_titles', ignore_index=True
-                )
-
-                exploded_alternate_titles = pd.json_normalize(
-                    games_alternate_titles_dataframe['alternate_titles']  # type: ignore
-                )
-                exploded_alternate_titles['game_id'] = games_alternate_titles_dataframe['game_id']
-
-                games_alternate_titles_dataframe = exploded_alternate_titles
-                games_alternate_titles_dataframe.insert(
-                    0, 'game_id', games_alternate_titles_dataframe.pop('game_id')
-                )
-
-                # Split out genres into their own dataframe
-                genres_dataframe = games_dataframe.filter(['genres', 'game_id'])
-                games_dataframe.pop('genres')
-
-                # Expand genres and add the game ID
-                genres_dataframe = genres_dataframe.explode('genres', ignore_index=True)
-
-                exploded_genres = pd.json_normalize(genres_dataframe['genres'])  # type: ignore
-                exploded_genres['game_id'] = genres_dataframe['game_id']
-
-                genres_dataframe = exploded_genres
-                genres_dataframe.insert(0, 'game_id', genres_dataframe.pop('game_id'))
-
-                # Get individual game details data
-                games_details: list[dict[str, Any]] = []
-
-                for game_id in game_ids:
-                    if pathlib.Path(f'cache/{platform_id}/games-details/{game_id}.json').is_file():
-                        with open(
-                            pathlib.Path(f'cache/{platform_id}/games-details/{game_id}.json'),
-                            encoding='utf-8',
-                        ) as games_details_cache:
-                            games_details.append(json.load(games_details_cache))
-
-                games_details = sorted(games_details, key=lambda x: x['game_id'])
-
-                # Handle attributes
-                attributes_dataframe = pd.json_normalize(
-                    data=games_details, record_path='attributes', meta=['game_id'], errors='ignore'
-                )
-                attributes_dataframe.insert(0, 'game_id', attributes_dataframe.pop('game_id'))
-
-                # Handle releases
-                releases_dataframe = pd.json_normalize(
-                    data=games_details,
-                    record_path=['releases', 'companies'],
-                    meta=[
-                        'game_id',
-                        ['releases', 'countries'],
-                        ['releases', 'description'],
-                        ['releases', 'release_date'],
-                    ],
-                    errors='ignore',
-                )
-                releases_dataframe.insert(0, 'game_id', releases_dataframe.pop('game_id'))
-                releases_dataframe.insert(
-                    1, 'releases.release_date', releases_dataframe.pop('releases.release_date')
-                )
-
-                # Expand the countries list in the releases dataframe
-                releases_dataframe = releases_dataframe.explode(
-                    'releases.countries', ignore_index=True
-                )
-
-                # Handle product codes
-                product_codes_dataframe = pd.json_normalize(
-                    data=games_details,
-                    record_path=['releases', 'product_codes'],
-                    meta=['game_id', ['releases', 'release_date']],
-                )
-                product_codes_dataframe.insert(0, 'game_id', product_codes_dataframe.pop('game_id'))
-                product_codes_dataframe.insert(
-                    1, 'releases.release_date', product_codes_dataframe.pop('releases.release_date')
-                )
-
-                # Handle patches
-                patches_dataframe = pd.json_normalize(
-                    data=games_details, record_path=['patches'], meta=['game_id']
-                )
-                patches_dataframe.insert(0, 'game_id', patches_dataframe.pop('game_id'))
-
-                # Handle ratings
-                ratings_dataframe = pd.json_normalize(
-                    data=games_details, record_path=['ratings'], meta=['game_id']
-                )
-                ratings_dataframe.insert(0, 'game_id', ratings_dataframe.pop('game_id'))
-
-                eprint('• Organizing game data... done.', indent=False, overwrite=True)
-
-                # Write the output files
-                eprint(
-                    f'\n{Font.success}Finished processing titles. Writing output files...'
-                    f'{Font.end}',
-                    indent=False,
-                )
-
-                def write_file(dataframe: pd.DataFrame, output_file: str) -> None:
-                    # Sanitize the dataframe
-                    dataframe = sanitize_dataframes(dataframe)
-
-                    # Write to delimited file, using a BOM so Microsoft apps interpret the encoding correctly
-                    dataframe.to_csv(output_file, index=False, encoding='utf-8-sig', sep=delimiter)
-
-                write_file(games_dataframe, f'{prefix}{raw_platform_name} - (Primary) Games.txt')
-
-                if len(games_alternate_titles_dataframe.index) > 0:
-                    write_file(
-                        games_alternate_titles_dataframe,
-                        f'{prefix}{raw_platform_name} - Alternate titles.txt',
-                    )
-
-                if len(genres_dataframe.index) > 0:
-                    write_file(genres_dataframe, f'{prefix}{raw_platform_name} - Genres.txt')
-
-                if len(attributes_dataframe.index) > 0:
-                    write_file(
-                        attributes_dataframe, f'{prefix}{raw_platform_name} - Attributes.txt'
-                    )
-
-                if len(releases_dataframe.index) > 0:
-                    write_file(releases_dataframe, f'{prefix}{raw_platform_name} - Releases.txt')
-
-                if len(product_codes_dataframe.index) > 0:
-                    write_file(
-                        product_codes_dataframe, f'{prefix}{raw_platform_name} - Product codes.txt'
-                    )
-
-                if len(patches_dataframe.index) > 0:
-                    write_file(patches_dataframe, f'{prefix}{raw_platform_name} - Patches.txt')
-
-                if len(ratings_dataframe.index) > 0:
-                    write_file(ratings_dataframe, f'{prefix}{raw_platform_name} - Ratings.txt')
-
-                eprint(
-                    f'{Font.success}Finished processing titles. Writing output files... '
-                    f'done.{Font.end}',
-                    overwrite=True,
-                    wrap=False,
-                )
+        if config.args.update:
+            get_updates(config)
     else:
         eprint(
             '\nMobyDump needs a MobyGames API key to continue. To add one:'

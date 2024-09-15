@@ -41,7 +41,7 @@ def api_request(
         eprint(
             'Can\'t connect to MobyGames API. Maybe the internet has dropped? Restart MobyDump to resume.',
             level='error',
-            indent=False,
+            indent=0,
         )
         sys.exit(1)
     except requests.exceptions.HTTPError as err:
@@ -49,7 +49,7 @@ def api_request(
             eprint(
                 'Unauthorized access. Have you provided a MobyGames API key?',
                 level='error',
-                indent=False,
+                indent=0,
             )
             eprint(f'\n{err}')
             sys.exit(1)
@@ -57,7 +57,7 @@ def api_request(
             eprint(
                 'The parameter sent was the right type, but was invalid.',
                 level='error',
-                indent=False,
+                indent=0,
             )
             eprint(f'\n{err}')
             sys.exit(1)
@@ -90,8 +90,10 @@ def api_request(
             )
         if err.response.status_code == 504:
             request_retry(url, headers, message, timeout, 'Gateway timeout for URL.')
+        elif 'Too Many Requests for url' in err:
+            request_retry(url, headers, message, timeout, 'Too many requests for URL.')
         else:
-            eprint(f'\n{err}', level='error', indent=False)
+            eprint(f'\n{err}', level='error', indent=0)
             sys.exit(1)
 
 
@@ -124,7 +126,7 @@ def request_retry(
             f'\n{error_message} Too many retries, exiting...',
             level='error',
             overwrite=True,
-            indent=False,
+            indent=0,
         )
         sys.exit(1)
     else:

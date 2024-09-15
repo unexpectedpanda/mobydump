@@ -163,5 +163,6 @@ cython_debug/
 
 # MobyDump folders and test files
 cache/
+cachebackup/
 *.txt
 *.accdb

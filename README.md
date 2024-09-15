@@ -19,7 +19,7 @@ set up your development environment. To do so, complete the following steps:
 1.  Install the required dependencies.
 
     ```
-    pip install numpy pandas requests
+    pip install natsort numpy pandas python-dateutil requests
     ```
 
 ### Set up your API key and rate limit
@@ -127,30 +127,53 @@ options:
   -p, --platforms       Get the platforms and their IDs from MobyGames.
 
   -g <PLATFORM_ID>, --games <PLATFORM_ID>
-                        Get all game details from MobyGames that belong
-                        to a specific platform ID.
+                        Get all game details from MobyGames that belong to a specific
+                        platform ID, and output the result to files. See flags that can be
+                        used with --games to change this behavior.
+
+  -u <NUMBER_OF_DAYS>, --update <NUMBER_OF_DAYS>
+                        Update all the games details for the platforms you've already
+                        downloaded, and output the result to files. See flags that can be
+                        used with --update to change this behavior.
+
+                        MobyGames only provides update data for the last 21 days. If
+                        you've waited longer, you should redownload the platform from
+                        scratch.
+
+  -ua "<USER_AGENT>", --useragent "<USER_AGENT>"
+                        Must be used with --games, --platforms, or --update.
+
+                        Change the user agent MobyDump supplies when making requests.
+                        Defaults to:
+
+                        MobyDump/0.3; https://github.com/unexpectedpanda/mobydump
 ```
 
-Flags that can be used with `--games`:
+Flags that can be used with `--games` or `--update`:
 
 ```
   -d "<DELIMITER>", --delimiter "<DELIMITER>"
-                        The single character delimiter to use in the output files.
-                        Accepts single-byte characters only. When not specified,
-                        defaults to tab. Ignored if filetype is set to JSON.
+                        The single character delimiter to use in the output files. Accepts
+                        single-byte characters only. When not specified, defaults to tab.
+                        Ignored if output is set to JSON.
 
-  -f <FILE_TYPE_ID>, --filetype <FILE_TYPE_ID>
+  -fr, --forcerestart   Don't resume from where MobyDump last left off. Instead, restart
+                        the request process from MobyGames. This deletes your cached files.
+
+  -o <FILE_TYPE_ID>, --output <FILE_TYPE_ID>
                         The file type to output to. When not specified, defaults to 1.
                         Choose a number from the following list:
 
+                        0 - Don't output files
                         1 - Delimiter separated value
                         2 - JSON
 
-                        Delimiter separated value files are sanitized for problem characters,
-                        JSON data is left raw.
+                        Delimiter separated value files are sanitized for problem
+                        characters, JSON data is left raw.
 
-  -fr, --forcerestart   Don't resume from where MobyDump last left off. Instead, restart the
-                        request process from MobyGames. This deletes your cached files.
+  -pa <FOLDER_PATH>, --path <FOLDER_PATH>
+                        The folder to output files to. When not specified, defaults to
+                        MobyDump's directory.
 
   -pr "<PREFIX>", --prefix "<PREFIX>"
                         The prefix to add to the beginning of output filenames. When not
@@ -174,14 +197,9 @@ Flags that can be used with `--games`:
                         10 - MobyGames non-commercial free API key
                         5  - MobyPro non-commercial API key
 
-                        Use lower numbers at your own risk. Unless you have an
-                        agreement with MobyGames, lower numbers than are suitable for
-                        your API key could get your client or API key banned.
-
-  -u "<USER_AGENT>", --useragent "<USER_AGENT>"
-                        Change the user agent MobyDump supplies when making requests.
-                        Defaults to:
-                        MobyDump/version; https://github.com/unexpectedpanda/mobydump
+                        Use lower numbers at your own risk. Unless you have an agreement
+                        with MobyGames, lower numbers than are suitable for your API key
+                        could get your client or API key banned.
 ```
 
 ## Known limitations

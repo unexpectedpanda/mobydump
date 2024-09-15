@@ -21,7 +21,7 @@ def user_input() -> argparse.Namespace:
     )
 
     # Help text order is determined by the group order here
-    game_options: Any = parser.add_argument_group('flags that can be used with --games')
+    game_options: Any = parser.add_argument_group('flags that can be used with --games or --update')
 
     parser.add_argument(
         '-h', '--help', '-?', action='help', default=argparse.SUPPRESS, help=argparse.SUPPRESS
@@ -39,8 +39,35 @@ def user_input() -> argparse.Namespace:
         '--games',
         metavar='<PLATFORM_ID>',
         type=int,
-        help='R|Get all game details from MobyGames that belong'
-        '\nto a specific platform ID.'
+        help='R|Get all game details from MobyGames that belong to a specific'
+        '\nplatform ID, and output the result to files. See flags that can be'
+        f'\nused with {Font.b}--games{Font.be} to change this behavior.'
+        '\n\n',
+    )
+
+    parser.add_argument(
+        '-u',
+        '--update',
+        metavar='<NUMBER_OF_DAYS>',
+        type=int,
+        help=f'R|Update all the games details for the platforms you\'ve already'
+        '\ndownloaded, and output the result to files. See flags that can be'
+        f'\nused with {Font.b}--update{Font.be} to change this behavior.'
+        '\n\nMobyGames only provides update data for the last 21 days. If'
+        '\nyou\'ve waited longer, you should redownload the platform from'
+        '\nscratch.'
+        '\n\n',
+    )
+
+    parser.add_argument(
+        '-ua',
+        '--useragent',
+        metavar='"<USER_AGENT>"',
+        type=str,
+        help=f'R|Must be used with {Font.b}--games{Font.be}, {Font.b}--platforms{Font.be}, or {Font.b}--update{Font.be}.'
+        '\n\nChange the user agent MobyDump supplies when making requests.'
+        '\nDefaults to:'
+        f'\n\n{Font.b}MobyDump/{const.__version__}; https://github.com/unexpectedpanda/mobydump{Font.be}'
         '\n\n',
     )
 
@@ -49,23 +76,9 @@ def user_input() -> argparse.Namespace:
         '--delimiter',
         metavar='"<DELIMITER>"',
         type=str,
-        help=f'R|The single character delimiter to use in the output files.'
-        f'\nAccepts single-byte characters only. When not specified,'
-        f'\ndefaults to {Font.b}tab{Font.be}. Ignored if filetype is set to {Font.b}JSON{Font.be}.'
-        '\n\n',
-    )
-
-    game_options.add_argument(
-        '-f',
-        '--filetype',
-        metavar='<FILE_TYPE_ID>',
-        type=int,
-        help=f'R|The file type to output to. When not specified, defaults to {Font.b}1{Font.be}.'
-        f'\nChoose a number from the following list:'
-        '\n\n1 - Delimiter separated value'
-        '\n2 - JSON'
-        '\n\nDelimiter separated value files are sanitized for problem characters,'
-        '\nJSON data is left raw.'
+        help=f'R|The single character delimiter to use in the output files. Accepts'
+        f'\nsingle-byte characters only. When not specified, defaults to {Font.b}tab{Font.be}.'
+        f'\nIgnored if output is set to {Font.b}JSON{Font.be}.'
         '\n\n',
     )
 
@@ -73,8 +86,33 @@ def user_input() -> argparse.Namespace:
         '-fr',
         '--forcerestart',
         action='store_true',
-        help='R|Don\'t resume from where MobyDump last left off. Instead, restart the'
-        '\nrequest process from MobyGames. This deletes your cached files.'
+        help='R|Don\'t resume from where MobyDump last left off. Instead, restart'
+        '\nthe request process from MobyGames. This deletes your cached files.'
+        '\n\n',
+    )
+
+    game_options.add_argument(
+        '-o',
+        '--output',
+        metavar='<FILE_TYPE_ID>',
+        type=int,
+        help=f'R|The file type to output to. When not specified, defaults to {Font.b}1{Font.be}.'
+        f'\nChoose a number from the following list:'
+        '\n\n0 - Don\'t output files'
+        '\n1 - Delimiter separated value'
+        '\n2 - JSON'
+        '\n\nDelimiter separated value files are sanitized for problem'
+        '\ncharacters, JSON data is left raw.'
+        '\n\n',
+    )
+
+    game_options.add_argument(
+        '-pa',
+        '--path',
+        metavar='<FOLDER_PATH>',
+        type=str,
+        help='R|The folder to output files to. When not specified, defaults to'
+        '\nMobyDump\'s directory.'
         '\n\n',
     )
 
@@ -107,20 +145,9 @@ def user_input() -> argparse.Namespace:
         '\nChoose a number from the following list:'
         '\n\n10 - MobyGames non-commercial free API key'
         '\n5  - MobyPro non-commercial API key'
-        '\n\nUse lower numbers at your own risk. Unless you have an'
-        '\nagreement with MobyGames, lower numbers than are suitable for'
-        '\nyour API key could get your client or API key banned.'
-        '\n\n',
-    )
-
-    game_options.add_argument(
-        '-u',
-        '--useragent',
-        metavar='"<USER_AGENT>"',
-        type=str,
-        help=f'R|Change the user agent MobyDump supplies when making requests.'
-        '\nDefaults to:'
-        f'\n{Font.b}MobyDump/{const.__version__}; https://github.com/unexpectedpanda/mobydump{Font.be}'
+        '\n\nUse lower numbers at your own risk. Unless you have an agreement'
+        '\nwith MobyGames, lower numbers than are suitable for your API key'
+        '\ncould get your client or API key banned.'
         '\n\n',
     )
 
@@ -132,32 +159,72 @@ def user_input() -> argparse.Namespace:
 
     # Handle incompatible arguments
     if args.platforms and args.games:
-        eprint('Can\'t use --platforms and --games together. Exiting...', level='error')
+        eprint(
+            f'Can\'t use {Font.b}--platforms{Font.be} and {Font.b}--games{Font.be} together. Exiting...',
+            level='error',
+        )
         sys.exit(1)
 
-    if args.delimiter and not args.games:
-        eprint('Must specify --games with --delimiter. Exiting...', level='error')
+    if args.platforms and args.update:
+        eprint(
+            f'Can\'t use {Font.b}--platforms{Font.be} and {Font.b}--update{Font.be} together. Exiting...',
+            level='error',
+        )
         sys.exit(1)
 
-    if args.filetype and not args.games:
-        eprint('Must specify --games with --filetype. Exiting...', level='error')
+    if args.games and args.update:
+        eprint(
+            f'Can\'t use {Font.b}--games{Font.be} and {Font.b}--update{Font.be} together. Exiting...',
+            level='error',
+        )
         sys.exit(1)
 
-    if args.filetype:
-        if args.filetype > 2 or args.filetype < 1:
-            eprint('Valid file types are 1 or 2. Exiting...', level='error')
+    if args.delimiter and not (args.games or args.update):
+        eprint(
+            f'Must specify {Font.b}--games{Font.be} or {Font.b}--update{Font.be} with {Font.b}--delimiter{Font.be}. Exiting...',
+            level='error',
+        )
+        sys.exit(1)
+
+    if args.output and not (args.games or args.update):
+        eprint(
+            f'Must specify {Font.b}--games{Font.be} or {Font.b}--update{Font.be} with {Font.b}--output{Font.be}. Exiting...',
+            level='error',
+        )
+        sys.exit(1)
+
+    if args.output:
+        if args.output > 2 or args.output < 0:
+            eprint(
+                'Valid file types are 0 (Don\'t output files), 1 (Delimiter separated value) or 2 (JSON). Exiting...',
+                level='error',
+            )
             sys.exit(1)
 
-    if args.prefix and not args.games:
-        eprint('Must specify --games with --prefix. Exiting...', level='error')
+    if args.prefix and not (args.games or args.update):
+        eprint(
+            f'Must specify {Font.b}--games{Font.be} or {Font.b}--update{Font.be} with {Font.b}--prefix{Font.be}. Exiting...',
+            level='error',
+        )
         sys.exit(1)
 
     if args.ratelimit and not args.games:
-        eprint('Must specify --games with --ratelimit. Exiting...', level='error')
+        eprint(
+            f'Must specify {Font.b}--games{Font.be} or {Font.b}--update{Font.be} with {Font.b}--ratelimit{Font.be}. Exiting...',
+            level='error',
+        )
         sys.exit(1)
 
-    if args.useragent and not (args.games or args.platforms):
-        eprint('Must specify --games or --platforms with --useragent. Exiting...', level='error')
+    if args.useragent and not (args.games or args.platforms or args.update):
+        eprint(
+            f'Must specify {Font.b}--games{Font.be}, {Font.b}--platforms{Font.be}, or {Font.b}--update{Font.be} with {Font.b}--useragent{Font.be}. Exiting...',
+            level='error',
+        )
         sys.exit(1)
+
+    if args.update:
+        if not 1 <= args.update <= 21:
+            eprint('The maximum number of days for updates is 21. Exiting...', level='error')
+            sys.exit(1)
 
     return args
