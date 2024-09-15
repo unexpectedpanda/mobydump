@@ -95,7 +95,6 @@ def main() -> None:
 
         if args.path:
             output_path = args.path
-            pathlib.Path(output_path).mkdir(parents=True, exist_ok=True)
 
         # Set the prefix
         prefix: str = ''

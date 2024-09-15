@@ -800,13 +800,18 @@ def write_output_files(
         platform_name (str): The MobyGames platform name.
         update (bool): Whether an update is being run.
     """
+    # Create the output path
+    if config.output_path:
+        pathlib.Path(config.output_path).mkdir(parents=True, exist_ok=True)
+
+    # Don't write files
     if config.output_file_type == 0:
         eprint(
             '• Finished processing titles.\n',
             wrap=False,
         )
+    # Write the output file in JSON
     elif config.output_file_type == 2:
-        # Write the output file in JSON
         eprint(
             f'\n{Font.success}Finished processing titles. Writing output file...{Font.end}',
             indent=0,
@@ -868,7 +873,7 @@ def write_output_files(
             overwrite=True,
             wrap=False,
         )
-
+    # Write the output files as delimiter separated value files
     elif config.output_file_type == 1:
         # Organize the data into separate tables for output, as Access can't
         # handle more than 255 columns of data, and the API returns data of
