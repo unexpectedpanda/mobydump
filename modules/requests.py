@@ -90,7 +90,7 @@ def api_request(
             )
         if err.response.status_code == 504:
             request_retry(url, headers, message, timeout, 'Gateway timeout for URL.')
-        elif 'Too Many Requests for url' in err:
+        elif 'Too Many Requests for url' in str(err):
             request_retry(url, headers, message, timeout, 'Too many requests for URL.')
         else:
             eprint(f'\n{err}', level='error', indent=0)

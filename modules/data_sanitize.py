@@ -24,6 +24,9 @@ def sanitize_dataframes(df: pd.core.frame.DataFrame) -> pd.core.frame.DataFrame:
     if 'description' in df:
         df['description'] = df['description'].str.replace(r'\s{2,}', ' ', regex=True)
 
+    # Remove null values
+    df = df.replace([None, np.nan], '')
+
     # Normalize curly quotes and replace other problem characters
     df = (
         df.replace(['“', '”'], '"', regex=True)
@@ -32,9 +35,6 @@ def sanitize_dataframes(df: pd.core.frame.DataFrame) -> pd.core.frame.DataFrame:
         .replace(['\u200b', '\u200c'], '', regex=True)
         .replace('\u00a0', ' ', regex=True)
     )
-
-    # Remove null values
-    df = df.replace([None, np.nan], '')
 
     # Normalize problem chacters in column headings
     df.columns = df.columns.str.replace('[.|/]', '_', regex=True)

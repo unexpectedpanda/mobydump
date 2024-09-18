@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4 (18 September 2024)
+
+- Some small crash fixes.
+
 ## v0.3 (15 September 2024)
 
 - Extra game details are now pulled from the `/games/{game_id}/platforms/{platform_id}`
