@@ -70,7 +70,9 @@ def main() -> None:
         api_key: str = html.escape(str(os.getenv('MOBY_API')))
 
         # Set the user agent
-        user_agent: str = f'MobyDump/{const.__version__}; https://github.com/unexpectedpanda/mobydump'
+        user_agent: str = (
+            f'MobyDump/{const.__version__}; https://github.com/unexpectedpanda/mobydump'
+        )
 
         if args.useragent:
             user_agent = str(args.useragent)
