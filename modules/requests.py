@@ -31,19 +31,16 @@ def api_request(
         response = requests.get(url, headers=headers)
 
         response.raise_for_status()
-
-        return response
     except requests.exceptions.Timeout:
-        request_retry(url, headers, message, timeout, 'Timeout.')
+        response = request_retry(url, headers, message, timeout, 'Timeout.')
     except requests.ConnectionError:
-        # It'd be nice to retry here instead, however the script loses context in some
-        # way. Needs more research to fix.
-        eprint(
-            'Can\'t connect to MobyGames API. Maybe the internet has dropped? Restart MobyDump to resume.',
-            level='error',
-            indent=0,
+        response = request_retry(
+            url,
+            headers,
+            message,
+            timeout,
+            'Can\'t connect to the MobyGames API, maybe the internet has dropped?',
         )
-        sys.exit(1)
     except requests.exceptions.HTTPError as err:
         if err.response.status_code == 401:
             eprint(
@@ -62,7 +59,7 @@ def api_request(
             eprint(f'\n{err}')
             sys.exit(1)
         if err.response.status_code == 429:
-            request_retry(
+            response = request_retry(
                 url,
                 headers,
                 message,
@@ -72,7 +69,7 @@ def api_request(
         if err.response.status_code == 500:
             # Sometimes MobyGames throws a 500, even though it shouldn't. Attempt a retry
             # if this happens.
-            request_retry(
+            response = request_retry(
                 url,
                 headers,
                 message,
@@ -81,7 +78,7 @@ def api_request(
             )
         if err.response.status_code == 502:
             # Sometimes MobyGames throws a 502. Attempt a retry if this happens.
-            request_retry(
+            response = request_retry(
                 url,
                 headers,
                 message,
@@ -89,12 +86,15 @@ def api_request(
                 'Received a 502: bad gateway error, assuming it\'s ephemeral.',
             )
         if err.response.status_code == 504:
-            request_retry(url, headers, message, timeout, 'Gateway timeout for URL.')
+            response = request_retry(url, headers, message, timeout, 'Gateway timeout for URL.')
         elif 'Too Many Requests for url' in str(err):
-            request_retry(url, headers, message, timeout, 'Too many requests for URL.')
+
+            response = request_retry(url, headers, message, timeout, 'Too many requests for URL.')
         else:
             eprint(f'\n{err}', level='error', indent=0)
             sys.exit(1)
+
+    return response
 
 
 def request_retry(
@@ -121,26 +121,33 @@ def request_retry(
     # Progressively increase the timeout with each retry
     progressive_timeout: list[int] = [0, 60, 300, 600, 3600, -1]
 
-    if progressive_timeout[timeout] == -1:
-        eprint(
-            f'\n{error_message} Too many retries, exiting...',
-            level='error',
-            overwrite=True,
-            indent=0,
-        )
-        sys.exit(1)
-    else:
-        for j in range(progressive_timeout[timeout]):
-            eprint(
-                f'• {error_message} Retry #{timeout} in {strftime("%H:%M:%S", gmtime(progressive_timeout[timeout] - j))}...',
-                level='warning',
-                overwrite=True,
-                wrap=False,
-            )
-            sleep(1)
+    # Set an empty response with a mock error code
+    response: requests.models.Response = requests.models.Response()
+    response.status_code = 418
 
-    timeout += 1
-    response = api_request(url, headers, message, timeout)
+    while response.status_code != 200:
+        if progressive_timeout[timeout] == -1:
+            eprint(
+                f'\n{error_message} Too many retries, exiting...',
+                level='error',
+                overwrite=True,
+                indent=0,
+            )
+            sys.exit(1)
+        else:
+            for j in range(progressive_timeout[timeout]):
+                eprint(
+                    f'• {error_message} Retry #{timeout} in {strftime("%H:%M:%S", gmtime(progressive_timeout[timeout] - j))}...',
+                    level='warning',
+                    overwrite=True,
+                    wrap=False,
+                )
+                sleep(1)
+
+        timeout += 1
+
+        response = api_request(url, headers, message, timeout)
+
     return response
 
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.5 (19 September 2024)
+
+- Fixed the retry function, and now things properly resume when the internet drops.
+
 ## v0.4 (18 September 2024)
 
 - Some small crash fixes.

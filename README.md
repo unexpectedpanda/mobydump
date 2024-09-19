@@ -204,9 +204,6 @@ Flags that can be used with `--games` or `--update`:
 
 ## Known limitations
 
-* If the internet drops, you need to manually restart MobyDump. At this stage it's unclear
-  why, but an auto-retry crashes MobyDump in this situation.
-
 * There's nothing to stop you setting a lower seconds-per-request than is allowed for
   your API key, or running MobyDump multiple times in parallel. I strongly advise you to
   stick to the advertised limits and only run one session of MobyDump, or your client or
