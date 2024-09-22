@@ -44,29 +44,29 @@ def api_request(
     except requests.exceptions.HTTPError as err:
         if err.response.status_code == 401:
             eprint(
-                'Unauthorized access. Have you provided a MobyGames API key?',
+                'Unauthorized access (401). Have you provided a MobyGames API key?',
                 level='error',
                 indent=0,
             )
             eprint(f'\n{err}')
             sys.exit(1)
-        if err.response.status_code == 422:
+        elif err.response.status_code == 422:
             eprint(
-                'The parameter sent was the right type, but was invalid.',
+                'Unprocessable content (422). The parameter sent was the right type, but was invalid.',
                 level='error',
                 indent=0,
             )
             eprint(f'\n{err}')
             sys.exit(1)
-        if err.response.status_code == 429:
+        elif err.response.status_code == 429 or 'Too Many Requests for url' in str(err):
             response = request_retry(
                 url,
                 headers,
                 message,
                 timeout,
-                'Rate limited: too many requests in too short a time.',
+                'Rate limited (429). Too many requests in too short a time.',
             )
-        if err.response.status_code == 500:
+        elif err.response.status_code == 500:
             # Sometimes MobyGames throws a 500, even though it shouldn't. Attempt a retry
             # if this happens.
             response = request_retry(
@@ -74,22 +74,25 @@ def api_request(
                 headers,
                 message,
                 timeout,
-                'Received a 500 internal server error, assuming it\'s ephemeral.',
+                'Internal server error (500). Assuming it\'s ephemeral.',
             )
-        if err.response.status_code == 502:
+        elif err.response.status_code == 502:
             # Sometimes MobyGames throws a 502. Attempt a retry if this happens.
             response = request_retry(
                 url,
                 headers,
                 message,
                 timeout,
-                'Received a 502: bad gateway error, assuming it\'s ephemeral.',
+                'Bad gateway error (502). Assuming it\'s ephemeral.',
             )
-        if err.response.status_code == 504:
-            response = request_retry(url, headers, message, timeout, 'Gateway timeout for URL.')
-        elif 'Too Many Requests for url' in str(err):
-
-            response = request_retry(url, headers, message, timeout, 'Too many requests for URL.')
+        elif err.response.status_code == 504:
+            response = request_retry(
+                url,
+                headers,
+                message,
+                timeout,
+                'Gateway timeout for URL (504). Assuming it\'s ephemeral.',
+            )
         else:
             eprint(f'\n{err}', level='error', indent=0)
             sys.exit(1)

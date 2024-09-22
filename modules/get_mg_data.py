@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from natsort import natsorted
 
-from modules.data_sanitize import sanitize_dataframes
+from modules.data_sanitize import replace_invalid_characters, sanitize_dataframes
 from modules.requests import api_request, request_wait
 from modules.utils import Config, Font, eprint
 
@@ -100,12 +100,12 @@ def get_games(
     """
     now: datetime.datetime
 
+    eprint(f'{Font.b}─────────────── Retrieving games from {platform_name} ───────────────{Font.be}\n')
     eprint(f'{Font.b}{Font.u}Stage 1{Font.end}')
     eprint(
         'Getting titles, alternate titles, descriptions, URLs, and genres.\n',
         indent=0,
     )
-    eprint(f'• Retrieving games from {platform_name}.')
 
     # Set the request offset
     offset: int = 0
@@ -200,17 +200,21 @@ def get_games(
 
 
 def get_game_details(
-    platform_id: int, completion_status: dict[str, bool | str], config: Config
+    platform_id: int, platform_name: str, completion_status: dict[str, bool | str], config: Config
 ) -> None:
     """
     Gets the attributes, patches, ratings, and releases for each game from MobyGames.
 
     Args:
         platform_id (int): The MobyGames platform ID.
+        platform_name (str): The MobyGames platform name.
         completion_status (dict[str, bool]): Which stages MobyDump has finished.
         config (Config): The MobyDump config object instance.
     """
     now: datetime.datetime
+
+    if list(pathlib.Path(f'cache/{platform_id}/games-details/').glob('*.json')):
+        eprint(f'{Font.b}─────────────── Retrieving games from {platform_name} ⎯⎯⎯⎯⎯──────────{Font.be}')
 
     eprint(
         f'\n{Font.b}{Font.u}Stage 2{Font.end}\nGetting attributes, patches, ratings, and releases for each game.\n',
@@ -544,7 +548,9 @@ def get_updates(config: Config) -> None:
                 rd = dateutil.relativedelta.relativedelta(now, last_updated)
 
                 if not rd.months and rd.days < 21:
-                    eprint(f'{Font.b}Updating the {platform["platform_name"]} platform{Font.be}')
+                    eprint(
+                        f'{Font.b}Updating the {platform["platform_name"]} platform{Font.be} ({platform["platform_id"]})'
+                    )
 
                     # Read from the update cache
                     updated_games: list[dict[str, Any]] = []
@@ -971,7 +977,30 @@ def write_output_files(
                     pathlib.Path(f'cache/{platform_id}/games-details/{game_id}.json'),
                     encoding='utf-8',
                 ) as games_details_cache:
-                    games_details.append(json.load(games_details_cache))
+                    try:
+                        games_details.append(json.load(games_details_cache))
+                    except Exception:
+                        game_details: dict[str, Any] = api_request(
+                            f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform_id}?api_key={config.api_key}',
+                            config.headers,
+                            message=f'• [Re-requesting details for game ID: {game_id}, as it seems to be corrupt...',
+                        ).json()
+
+                        with open(
+                            pathlib.Path(f'cache/{platform_id}/games-details/{game_id}.json'),
+                            'w',
+                            encoding='utf-8',
+                        ) as game_details_cache:
+                            game_details_cache.write(
+                                json.dumps(game_details, indent=2, ensure_ascii=False)
+                            )
+
+                        eprint(
+                            f'• [Re-requesting details for game ID: {game_id}, as it seems to be corrupt... done.',
+                            overwrite=True,
+                        )
+
+                        games_details.append(json.load(games_details_cache))
 
         games_details = sorted(games_details, key=lambda x: x['game_id'])
 
@@ -1043,8 +1072,10 @@ def write_output_files(
             # Write to delimited file, using a BOM so Microsoft apps interpret the encoding correctly
             dataframe.to_csv(output_file, index=False, encoding='utf-8-sig', sep=config.delimiter)
 
+        file_platform_name: str = replace_invalid_characters(platform_name)
+
         output_path_prefix: pathlib.Path = pathlib.Path(config.output_path).joinpath(
-            f'{config.prefix}{platform_name}'
+            f'{config.prefix}{file_platform_name}'
         )
 
         write_file(games_dataframe, f'{output_path_prefix} - (Primary) Games.txt')

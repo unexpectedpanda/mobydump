@@ -182,9 +182,7 @@ def main() -> None:
 
                 for cached_platform in cached_platforms['platforms']:
                     if cached_platform['platform_id'] == platform_id:
-                        platform_name = (
-                            f'the {Font.b}{cached_platform["platform_name"]}{Font.be} platform'
-                        )
+                        platform_name = f'the {cached_platform["platform_name"]} platform'
 
                         raw_platform_name = cached_platform['platform_name']
 
@@ -241,7 +239,7 @@ def main() -> None:
 
             # Stage 2: Download individual game details
             if not completion_status['stage_2_finished']:
-                get_game_details(platform_id, completion_status, config)
+                get_game_details(platform_id, platform_name, completion_status, config)
 
             # Write the output files
             write_output_files(config, platform_id, raw_platform_name)

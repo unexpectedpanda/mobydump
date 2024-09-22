@@ -1,5 +1,15 @@
 # Changelog
 
+# v0.6 (22 September 2024)
+
+- Fixed a crash when a platform name used invalid characters for a filepath.
+
+- Slight rework of HTTP error handling.
+
+- Added a basic catch for corrupt game details files.
+
+- Improved some messages written to screen.
+
 ## v0.5 (19 September 2024)
 
 - Fixed the retry function, and now things properly resume when the internet drops.

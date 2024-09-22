@@ -1,5 +1,41 @@
+import re
+
 import numpy as np
 import pandas as pd
+
+
+def replace_invalid_characters(name: str) -> str:
+    r"""
+    Removes invalid file / folder name characters from a string.
+
+    Args:
+        name (str): A file or folder name.
+
+    Returns:
+        str: A string with invalid file characters removed.
+    """
+    sanitized_characters: tuple[str, ...] = (':', '\\', '/', '<', '>', '"', '|', '?', '*')
+
+    for character in sanitized_characters:
+        if character in name:
+            if character == ':':
+                if re.search('(\\S):\\s', name):
+                    name = re.sub('(\\S):\\s', '\\1 - ', name)
+                else:
+                    name = name.replace(character, '-')
+            elif character == '"':
+                name = name.replace(character, '\'')
+            elif character == '\\':
+                name = name.replace(character, '-')
+            elif character == '/':
+                name = name.replace(character, '-')
+            else:
+                name = name.replace(character, '-')
+
+    # For strings that start with ., use the fixed width ．instead
+    name = re.sub('^\\.', '．', name)  # noqa: RUF001
+
+    return name
 
 
 def sanitize_dataframes(df: pd.core.frame.DataFrame) -> pd.core.frame.DataFrame:
