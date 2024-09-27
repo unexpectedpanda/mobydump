@@ -1,5 +1,10 @@
 # Changelog
 
+# v0.7 (25 September 2024)
+
+- MobyDump now outputs cache files with removed whitespace, which saves several hundred MB
+  of disk space for the entire set of platform data.
+
 # v0.6 (22 September 2024)
 
 - Fixed a crash when a platform name used invalid characters for a filepath.

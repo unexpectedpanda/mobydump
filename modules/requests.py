@@ -74,7 +74,7 @@ def api_request(
                 headers,
                 message,
                 timeout,
-                'Internal server error (500). Assuming it\'s ephemeral.',
+                'Internal server error (500). Assuming the issue\'s ephemeral.',
             )
         elif err.response.status_code == 502:
             # Sometimes MobyGames throws a 502. Attempt a retry if this happens.
@@ -83,7 +83,15 @@ def api_request(
                 headers,
                 message,
                 timeout,
-                'Bad gateway error (502). Assuming it\'s ephemeral.',
+                'Bad gateway error (502). Assuming the issue\'s ephemeral.',
+            )
+        elif err.response.status_code == 503:
+            response = request_retry(
+                url,
+                headers,
+                message,
+                timeout,
+                'Service unavailable (503). Assuming the issue\'s ephemeral.',
             )
         elif err.response.status_code == 504:
             response = request_retry(
@@ -91,7 +99,23 @@ def api_request(
                 headers,
                 message,
                 timeout,
-                'Gateway timeout for URL (504). Assuming it\'s ephemeral.',
+                'Gateway timeout for URL (504). Assuming the issue\'s ephemeral.',
+            )
+        elif err.response.status_code == 520:
+            response = request_retry(
+                url,
+                headers,
+                message,
+                timeout,
+                'Cloudflare: Web server returned an unknown error (520). Assuming the issue\'s ephemeral.',
+            )
+        elif err.response.status_code == 522 or err.response.status_code == 524:
+            response = request_retry(
+                url,
+                headers,
+                message,
+                timeout,
+                f'Cloudflare: Origin server timed out ({err.response.status_code}). Assuming the issue\'s ephemeral.',
             )
         else:
             eprint(f'\n{err}', level='error', indent=0)

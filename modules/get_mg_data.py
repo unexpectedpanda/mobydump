@@ -186,7 +186,7 @@ def get_games(
             'w',
             encoding='utf-8',
         ) as platform_request_cache:
-            platform_request_cache.write(json.dumps(game_dict, indent=2, ensure_ascii=False))
+            platform_request_cache.write(json.dumps(game_dict, separators=(',', ':'), ensure_ascii=False))
 
         # Write the completion status
         with open(
@@ -274,7 +274,7 @@ def get_game_details(
                     'w',
                     encoding='utf-8',
                 ) as game_details_cache:
-                    game_details_cache.write(json.dumps(game_details, indent=2, ensure_ascii=False))
+                    game_details_cache.write(json.dumps(game_details, separators=(',', ':'), ensure_ascii=False))
 
                 now = (
                     datetime.datetime.now(tz=datetime.timezone.utc)
@@ -478,7 +478,7 @@ def get_updates(config: Config) -> None:
                 'w',
                 encoding='utf-8',
             ) as platform_request_cache:
-                platform_request_cache.write(json.dumps(game_dict, indent=2, ensure_ascii=False))
+                platform_request_cache.write(json.dumps(game_dict, separators=(',', ':'), ensure_ascii=False))
 
             # Write the completion status
             with open(pathlib.Path('cache/updates.json'), 'w', encoding='utf-8') as status_cache:
@@ -743,7 +743,7 @@ def get_updates(config: Config) -> None:
                                     encoding='utf-8',
                                 ) as game_details_cache:
                                     game_details_cache.write(
-                                        json.dumps(game_details, indent=2, ensure_ascii=False)
+                                        json.dumps(game_details, separators=(',', ':'), ensure_ascii=False)
                                     )
 
                                 now = (
@@ -992,7 +992,7 @@ def write_output_files(
                             encoding='utf-8',
                         ) as game_details_cache:
                             game_details_cache.write(
-                                json.dumps(game_details, indent=2, ensure_ascii=False)
+                                json.dumps(game_details, separators=(',', ':'), ensure_ascii=False)
                             )
 
                         eprint(
