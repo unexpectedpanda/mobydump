@@ -3,17 +3,23 @@ from __future__ import annotations
 import datetime
 import json
 import pathlib
+import requests
 import sys
+import zipfile
 from typing import Any
 
 import dateutil
+import dropbox
 import numpy as np
 import pandas as pd
+from compress_json import compress, decompress
+from dropbox.exceptions import ApiError, AuthError
+from dropbox.files import WriteMode
 from natsort import natsorted
 
 from modules.data_sanitize import replace_invalid_characters, sanitize_dataframes
 from modules.requests import api_request, request_wait
-from modules.utils import Config, Font, eprint
+from modules.utils import Config, Font, eprint, get_dropbox_short_lived_token
 
 
 def add_games(games_dict: dict[str, Any], games: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -34,34 +40,39 @@ def add_games(games_dict: dict[str, Any], games: list[dict[str, Any]]) -> list[d
     return games
 
 
-def delete_cache(cache_folder: int | str) -> dict[str, bool | str]:
+def delete_cache(cache_folder: int | str, config: Config) -> dict[str, bool | str]:
     """
     Deletes the local cache for a downloaded platform.
 
     Args:
         cache_folder (int|str): The MobyGames platform ID to delete downloaded data for.
+        config (Config): The MobyDump config object instance.
 
     Returns:
         dict[str, bool]: A reset completion status.
     """
     if cache_folder == 'updates':
         # Delete the updates cache files
-        for game_file in pathlib.Path('cache/updates/').glob('*.json'):
+        for game_file in pathlib.Path(config.cache).joinpath('updates/').glob('*.json'):
             game_file.unlink()
 
         # Rewrite the status file
         completion_status = {'update_finished': False}
 
-        with open(pathlib.Path('cache/updates.json'), 'w', encoding='utf-8') as status_cache:
+        with open(
+            pathlib.Path(config.cache).joinpath('updates.json'), 'w', encoding='utf-8'
+        ) as status_cache:
             status_cache.write(json.dumps(completion_status, indent=2, ensure_ascii=False))
     else:
         # Delete the game cache files
-        for game_file in pathlib.Path(f'cache/{cache_folder}/games/').glob('*.json'):
+        for game_file in (
+            pathlib.Path(config.cache).joinpath(f'{cache_folder}/games/').glob('*.json')
+        ):
             game_file.unlink()
 
         # Delete the game details files
-        for game_details_file in pathlib.Path(f'cache/{cache_folder}/games-details/').glob(
-            '*.json'
+        for game_details_file in (
+            pathlib.Path(config.cache).joinpath(f'{cache_folder}/games-details/').glob('*.json')
         ):
             game_details_file.unlink()
 
@@ -79,7 +90,9 @@ def delete_cache(cache_folder: int | str) -> dict[str, bool | str]:
         }
 
         with open(
-            pathlib.Path(f'cache/{cache_folder}/status.json'), 'w', encoding='utf-8'
+            pathlib.Path(config.cache).joinpath(f'{cache_folder}/status.json'),
+            'w',
+            encoding='utf-8',
         ) as status_cache:
             status_cache.write(json.dumps(completion_status, indent=2, ensure_ascii=False))
 
@@ -100,7 +113,9 @@ def get_games(
     """
     now: datetime.datetime
 
-    eprint(f'{Font.b}─────────────── Retrieving games from {platform_name} ───────────────{Font.be}\n')
+    eprint(
+        f'{Font.b}─────────────── Retrieving games from {platform_name} ───────────────{Font.be}\n'
+    )
     eprint(f'{Font.b}{Font.u}Stage 1{Font.end}')
     eprint(
         'Getting titles, alternate titles, descriptions, URLs, and genres.\n',
@@ -112,13 +127,15 @@ def get_games(
     offset_increment: int = 100
 
     # Figure out the last offset's data that has been cached
-    if list(pathlib.Path(f'cache/{platform_id}/games/').glob('*.json')):
+    if list(pathlib.Path(config.cache).joinpath(f'{platform_id}/games/').glob('*.json')):
         offset = (
             max(
                 natsorted(
                     [
                         int(x.stem)
-                        for x in pathlib.Path(f'cache/{platform_id}/games/').glob('*.json')
+                        for x in pathlib.Path(config.cache)
+                        .joinpath(f'{platform_id}/games/')
+                        .glob('*.json')
                     ]
                 )
             )
@@ -156,9 +173,16 @@ def get_games(
             # Increment the offset
             offset = offset + offset_increment
 
-            # Break the loop if MobyGames returns an empty response or if there's less than 100 titles, as we've
-            # reached the end
+            # Break the loop if MobyGames returns an empty response
             if 'games' in game_dict:
+                # Strip the sample_screenshots array
+                for game in game_dict['games']:
+                    try:
+                        del game['sample_screenshots']
+                    except Exception:
+                        pass
+
+                # Break the loop if there's less than 100 titles, as we've reached the end
                 now = (
                     datetime.datetime.now(tz=datetime.timezone.utc)
                     .replace(tzinfo=datetime.timezone.utc)
@@ -182,15 +206,19 @@ def get_games(
 
         # Write the cache
         with open(
-            pathlib.Path(f'cache/{platform_id}/games/{offset-offset_increment!s}.json'),
+            pathlib.Path(config.cache).joinpath(
+                f'{platform_id}/games/{offset-offset_increment!s}.json'
+            ),
             'w',
             encoding='utf-8',
         ) as platform_request_cache:
-            platform_request_cache.write(json.dumps(game_dict, separators=(',', ':'), ensure_ascii=False))
+            platform_request_cache.write(
+                json.dumps(compress(game_dict), separators=(',', ':'), ensure_ascii=False)
+            )
 
         # Write the completion status
         with open(
-            pathlib.Path(f'cache/{platform_id}/status.json'), 'w', encoding='utf-8'
+            pathlib.Path(config.cache).joinpath(f'{platform_id}/status.json'), 'w', encoding='utf-8'
         ) as status_cache:
             status_cache.write(json.dumps(completion_status, indent=2, ensure_ascii=False))
 
@@ -213,8 +241,10 @@ def get_game_details(
     """
     now: datetime.datetime
 
-    if list(pathlib.Path(f'cache/{platform_id}/games-details/').glob('*.json')):
-        eprint(f'{Font.b}─────────────── Retrieving games from {platform_name} ⎯⎯⎯⎯⎯──────────{Font.be}')
+    if list(pathlib.Path(config.cache).joinpath(f'{platform_id}/games-details/').glob('*.json')):
+        eprint(
+            f'{Font.b}─────────────── Retrieving games from {platform_name} ⎯⎯⎯⎯⎯──────────{Font.be}'
+        )
 
     eprint(
         f'\n{Font.b}{Font.u}Stage 2{Font.end}\nGetting attributes, patches, ratings, and releases for each game.\n',
@@ -222,12 +252,12 @@ def get_game_details(
     )
 
     # Show a resume message if needed
-    if list(pathlib.Path(f'cache/{platform_id}/games-details/').glob('*.json')):
+    if list(pathlib.Path(config.cache).joinpath(f'{platform_id}/games-details/').glob('*.json')):
         eprint('• Requests were previously interrupted, resuming...')
 
     # Get the game count
     files: list[pathlib.Path] = natsorted(
-        list(pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'))
+        list(pathlib.Path(config.cache).joinpath(f'{platform_id}/games/').glob('*.json'))
     )
     file_count: int = len(files)
     game_count: int = file_count * 100 - 100
@@ -235,17 +265,29 @@ def get_game_details(
     with open(pathlib.Path(files[-1]), encoding='utf-8') as platform_request_cache:
         cache: dict[str, Any] = json.loads(platform_request_cache.read())
 
+        try:
+            cache = decompress(cache)
+        except Exception:
+            pass
+
         game_count = game_count + len(cache['games'])
 
     game_iterator: int = 0
 
-    for game_file in natsorted(pathlib.Path(f'cache/{platform_id}/games/').glob('*.json')):
+    for game_file in natsorted(
+        pathlib.Path(config.cache).joinpath(f'{platform_id}/games/').glob('*.json')
+    ):
 
         # Get the game IDs to download details for
         games: list[tuple[int, str]] = []
 
         with open(pathlib.Path(game_file), encoding='utf-8') as platform_request_cache:
             cache: dict[str, Any] = json.loads(platform_request_cache.read())
+
+            try:
+                cache = decompress(cache)
+            except Exception:
+                pass
 
             games = get_game_ids_and_titles(cache)
 
@@ -256,7 +298,11 @@ def get_game_details(
             game_id = game[0]
             game_title = game[1]
 
-            if not pathlib.Path(f'cache/{platform_id}/games-details/{game_id}.json').is_file():
+            if (
+                not pathlib.Path(config.cache)
+                .joinpath(f'{platform_id}/games-details/{game_id}.json')
+                .is_file()
+            ):
                 now = (
                     datetime.datetime.now(tz=datetime.timezone.utc)
                     .replace(tzinfo=datetime.timezone.utc)
@@ -270,11 +316,17 @@ def get_game_details(
                 ).json()
 
                 with open(
-                    pathlib.Path(f'cache/{platform_id}/games-details/{game_id}.json'),
+                    pathlib.Path(config.cache).joinpath(
+                        f'{platform_id}/games-details/{game_id}.json'
+                    ),
                     'w',
                     encoding='utf-8',
                 ) as game_details_cache:
-                    game_details_cache.write(json.dumps(game_details, separators=(',', ':'), ensure_ascii=False))
+                    game_details_cache.write(
+                        json.dumps(
+                            compress(game_details), separators=(',', ':'), ensure_ascii=False
+                        )
+                    )
 
                 now = (
                     datetime.datetime.now(tz=datetime.timezone.utc)
@@ -294,7 +346,7 @@ def get_game_details(
     completion_status['stage_2_finished'] = True
 
     with open(
-        pathlib.Path(f'cache/{platform_id}/status.json'), 'w', encoding='utf-8'
+        pathlib.Path(config.cache).joinpath(f'{platform_id}/status.json'), 'w', encoding='utf-8'
     ) as status_cache:
         status_cache.write(json.dumps(completion_status, indent=2, ensure_ascii=False))
 
@@ -347,10 +399,12 @@ def get_platforms(config: Config) -> dict[str, list[dict[str, str | int]]]:
     eprint('• Retrieving platforms... done.', overwrite=True)
 
     # Store the response in a file
-    if not pathlib.Path('cache').is_dir():
-        pathlib.Path('cache').mkdir(parents=True, exist_ok=True)
+    if not pathlib.Path(config.cache).is_dir():
+        pathlib.Path(config.cache).mkdir(parents=True, exist_ok=True)
 
-    with open(pathlib.Path('cache/platforms.json'), 'w', encoding='utf-8') as platform_cache:
+    with open(
+        pathlib.Path(config.cache).joinpath('platforms.json'), 'w', encoding='utf-8'
+    ) as platform_cache:
         platform_cache.write(json.dumps(platforms, indent=2, ensure_ascii=False))
 
     return platforms
@@ -375,8 +429,10 @@ def get_updates(config: Config) -> None:
     # Get the completion status
     completion_status = {'update_finished': False}
 
-    if pathlib.Path('cache/updates.json').is_file():
-        with open(pathlib.Path('cache/updates.json'), encoding='utf-8') as status_cache:
+    if pathlib.Path(config.cache).joinpath('updates.json').is_file():
+        with open(
+            pathlib.Path(config.cache).joinpath('updates.json'), encoding='utf-8'
+        ) as status_cache:
             try:
                 completion_status = json.load(status_cache)
             except Exception:
@@ -398,7 +454,7 @@ def get_updates(config: Config) -> None:
                 eprint('')
 
     if resume == 'r' or config.args.forcerestart:
-        completion_status = delete_cache('updates')
+        completion_status = delete_cache('updates', config)
     elif resume == 'q':
         sys.exit()
 
@@ -409,9 +465,16 @@ def get_updates(config: Config) -> None:
         offset_increment: int = 100
 
         # Figure out the last offset's data that has been cached
-        if list(pathlib.Path('cache/updates/').glob('*.json')):
+        if list(pathlib.Path(config.cache).joinpath('updates/').glob('*.json')):
             offset = (
-                max(natsorted([int(x.stem) for x in pathlib.Path('cache/updates/').glob('*.json')]))
+                max(
+                    natsorted(
+                        [
+                            int(x.stem)
+                            for x in pathlib.Path(config.cache).joinpath('updates/').glob('*.json')
+                        ]
+                    )
+                )
                 + offset_increment
             )
 
@@ -447,9 +510,16 @@ def get_updates(config: Config) -> None:
             # Increment the offset
             offset = offset + offset_increment
 
-            # Break the loop if MobyGames returns an empty response or if there's less than 100 titles, as we've
-            # reached the end
+            # Break the loop if MobyGames returns an empty response
             if 'games' in game_dict:
+                # Strip the sample_screenshots array
+                for game in game_dict['games']:
+                    try:
+                        del game['sample_screenshots']
+                    except Exception:
+                        pass
+
+                # Break the loop if there's less than 100 titles, as we've reached the end
                 now = (
                     datetime.datetime.now(tz=datetime.timezone.utc)
                     .replace(tzinfo=datetime.timezone.utc)
@@ -474,14 +544,18 @@ def get_updates(config: Config) -> None:
 
             # Write the cache
             with open(
-                pathlib.Path(f'cache/updates/{offset-offset_increment!s}.json'),
+                pathlib.Path(config.cache).joinpath(f'updates/{offset-offset_increment!s}.json'),
                 'w',
                 encoding='utf-8',
             ) as platform_request_cache:
-                platform_request_cache.write(json.dumps(game_dict, separators=(',', ':'), ensure_ascii=False))
+                platform_request_cache.write(
+                    json.dumps(compress(game_dict), separators=(',', ':'), ensure_ascii=False)
+                )
 
             # Write the completion status
-            with open(pathlib.Path('cache/updates.json'), 'w', encoding='utf-8') as status_cache:
+            with open(
+                pathlib.Path(config.cache).joinpath('updates.json'), 'w', encoding='utf-8'
+            ) as status_cache:
                 status_cache.write(json.dumps(completion_status, indent=2, ensure_ascii=False))
 
             # End the loop if needed
@@ -490,13 +564,15 @@ def get_updates(config: Config) -> None:
 
     if completion_status['update_finished']:
         # Get the platform IDs
-        if not pathlib.Path('cache/platforms.json').is_file():
+        if not pathlib.Path(config.cache).joinpath('platforms.json').is_file():
             get_platforms(config)
             request_wait(config.rate_limit)
 
         platforms: dict[str, int] = {}
 
-        with open(pathlib.Path('cache/platforms.json'), encoding='utf-8') as platform_cache:
+        with open(
+            pathlib.Path(config.cache).joinpath('platforms.json'), encoding='utf-8'
+        ) as platform_cache:
             platforms = json.loads(platform_cache.read())['platforms']
 
             platforms = sorted(platforms, key=lambda x: x['platform_id'])
@@ -506,10 +582,16 @@ def get_updates(config: Config) -> None:
             # Check the last updated dates for each platform
             last_updated: datetime.datetime | None = None
 
-            if pathlib.Path(f'cache/{platform["platform_id"]}').is_dir():
-                if pathlib.Path(f'cache/{platform["platform_id"]}/status.json').is_file():
+            if pathlib.Path(config.cache).joinpath(f'{platform["platform_id"]}').is_dir():
+                if (
+                    pathlib.Path(config.cache)
+                    .joinpath(f'{platform["platform_id"]}/status.json')
+                    .is_file()
+                ):
                     with open(
-                        pathlib.Path(f'cache/{platform["platform_id"]}/status.json'),
+                        pathlib.Path(config.cache).joinpath(
+                            f'{platform["platform_id"]}/status.json'
+                        ),
                         encoding='utf-8',
                     ) as status_cache:
                         try:
@@ -555,9 +637,14 @@ def get_updates(config: Config) -> None:
                     # Read from the update cache
                     updated_games: list[dict[str, Any]] = []
 
-                    for game_file in pathlib.Path('cache/updates/').glob('*.json'):
+                    for game_file in pathlib.Path(config.cache).joinpath('updates/').glob('*.json'):
                         with open(pathlib.Path(game_file), encoding='utf-8') as update_cache:
                             cache = json.loads(update_cache.read())
+
+                            try:
+                                cache = decompress(cache)
+                            except Exception:
+                                pass
 
                             updated_games.extend(cache['games'])
 
@@ -580,13 +667,20 @@ def get_updates(config: Config) -> None:
                         # Get all the game IDs for the platform
                         game_ids: set[int] = set()
 
-                        for game_file in pathlib.Path(
-                            f'cache/{platform["platform_id"]}/games/'
-                        ).glob('*.json'):
+                        for game_file in (
+                            pathlib.Path(config.cache)
+                            .joinpath(f'{platform["platform_id"]}/games/')
+                            .glob('*.json')
+                        ):
                             with open(
                                 pathlib.Path(game_file), encoding='utf-8'
                             ) as platform_request_cache:
                                 cache = json.loads(platform_request_cache.read())
+
+                                try:
+                                    cache = decompress(cache)
+                                except Exception:
+                                    pass
 
                                 game_ids = game_ids | {x['game_id'] for x in cache['games']}
 
@@ -625,12 +719,17 @@ def get_updates(config: Config) -> None:
                                 try:
                                     if game_id > last_id:
                                         with open(
-                                            pathlib.Path(
-                                                f'cache/{platform["platform_id"]}/games/{100*file_count}.json'
+                                            pathlib.Path(config.cache).joinpath(
+                                                f'{platform["platform_id"]}/games/{100*file_count}.json'
                                             ),
                                             encoding='utf-8',
                                         ) as platform_request_cache:
                                             cache = json.loads(platform_request_cache.read())
+
+                                            try:
+                                                cache = decompress(cache)
+                                            except Exception:
+                                                pass
 
                                     # Get the last ID in the cache file, and if we've exceeded it, don't check this file again
                                     last_id: int = max([x['game_id'] for x in cache['games']])
@@ -650,30 +749,39 @@ def get_updates(config: Config) -> None:
                                 ).split('\n')
 
                                 with open(
-                                    pathlib.Path(
-                                        f'cache/{platform["platform_id"]}/games/{100*file_count}.jsontmp'
+                                    pathlib.Path(config.cache).joinpath(
+                                        f'{platform["platform_id"]}/games/{100*file_count}.jsontmp'
                                     ),
                                     'w',
                                     encoding='utf-8',
                                 ) as platform_request_cache:
-                                    platform_request_cache.write('{\n  "games": ')
+                                    cache_file_write: list[str] = []
+                                    cache_file_write.append('{\n  "games": ')
                                     for i, line in enumerate(json_contents):
                                         if i == 0:
-                                            platform_request_cache.write(f'{line}\n')
+                                            cache_file_write.append(f'{line}\n')
                                         elif i == len(json_contents) - 1:
-                                            platform_request_cache.write(f'  {line}')
+                                            cache_file_write.append(f'  {line}')
                                         else:
-                                            platform_request_cache.write(f'  {line}\n')
-                                    platform_request_cache.write('  \n}')
+                                            cache_file_write.append(f'  {line}\n')
+                                    cache_file_write.append('  \n}')
+
+                                    platform_request_cache.write(
+                                        json.dumps(
+                                            compress(json.loads(''.join(cache_file_write))),
+                                            separators=(',', ':'),
+                                            ensure_ascii=False,
+                                        )
+                                    )
 
                                 file_contents = []
                                 file_count += 1
 
                         # Rename temporary files to overwrite the existing cache files
                         for game_file in natsorted(
-                            pathlib.Path(f'cache/{platform["platform_id"]}/games/').glob(
-                                '*.jsontmp'
-                            )
+                            pathlib.Path(config.cache)
+                            .joinpath(f'{platform["platform_id"]}/games/')
+                            .glob('*.jsontmp')
                         ):
                             game_file.replace(
                                 pathlib.Path(
@@ -695,7 +803,9 @@ def get_updates(config: Config) -> None:
                         }
 
                         with open(
-                            pathlib.Path(f'cache/{platform["platform_id"]}/status.json'),
+                            pathlib.Path(config.cache).joinpath(
+                                f'{platform["platform_id"]}/status.json'
+                            ),
                             'w',
                             encoding='utf-8',
                         ) as status_cache:
@@ -736,14 +846,18 @@ def get_updates(config: Config) -> None:
                                 ).json()
 
                                 with open(
-                                    pathlib.Path(
-                                        f'cache/{platform["platform_id"]}/games-details/{game_id}.json'
+                                    pathlib.Path(config.cache).joinpath(
+                                        f'{platform["platform_id"]}/games-details/{game_id}.json'
                                     ),
                                     'w',
                                     encoding='utf-8',
                                 ) as game_details_cache:
                                     game_details_cache.write(
-                                        json.dumps(game_details, separators=(',', ':'), ensure_ascii=False)
+                                        json.dumps(
+                                            compress(game_details),
+                                            separators=(',', ':'),
+                                            ensure_ascii=False,
+                                        )
                                     )
 
                                 now = (
@@ -766,11 +880,15 @@ def get_updates(config: Config) -> None:
                             )
                             eprint('• Deleting removed games from the cache...')
                             for game_id in removed_game_ids:
-                                if pathlib.Path(
-                                    f'cache/{platform["platform_id"]}/games-details/{game_id}.json'
-                                ).is_file():
-                                    pathlib.Path(
-                                        f'cache/{platform["platform_id"]}/games-details/{game_id}.json'
+                                if (
+                                    pathlib.Path(config.cache)
+                                    .joinpath(
+                                        f'{platform["platform_id"]}/games-details/{game_id}.json'
+                                    )
+                                    .is_file()
+                                ):
+                                    pathlib.Path(config.cache).joinpath(
+                                        f'{platform["platform_id"]}/games-details/{game_id}.json'
                                     ).unlink()
 
                             eprint(
@@ -779,10 +897,7 @@ def get_updates(config: Config) -> None:
 
                         # Write out the files for the platform
                         write_output_files(
-                            config,
-                            platform["platform_id"],
-                            platform["platform_name"],
-                            update=True,
+                            config, platform['platform_id'], platform['platform_name']
                         )
                     else:
                         eprint('• No games needed to be updated.')
@@ -794,9 +909,7 @@ def get_updates(config: Config) -> None:
                     continue
 
 
-def write_output_files(
-    config: Config, platform_id: int, platform_name: str, update: bool = False
-) -> None:
+def write_output_files(config: Config, platform_id: int, platform_name: str) -> None:
     """
     Writes files based on downloaded MobyGames data in multiple formats.
 
@@ -806,6 +919,9 @@ def write_output_files(
         platform_name (str): The MobyGames platform name.
         update (bool): Whether an update is being run.
     """
+    compress_files: list[pathlib.Path] = []
+    file_platform_name: str = replace_invalid_characters(platform_name)
+
     # Create the output path
     if config.output_path:
         pathlib.Path(config.output_path).mkdir(parents=True, exist_ok=True)
@@ -813,41 +929,52 @@ def write_output_files(
     # Don't write files
     if config.output_file_type == 0:
         eprint(
-            '• Finished processing titles.\n',
+            '• Finished processing titles.',
             wrap=False,
         )
+
     # Write the output file in JSON
-    elif config.output_file_type == 2:
-        eprint(
-            f'\n{Font.success}Finished processing titles. Writing output file...{Font.end}',
-            indent=0,
-        )
+    if config.output_file_type == 2 or config.output_file_type == 3:
+        eprint('• Finished processing titles. Writing JSON output file...', indent=0, wrap=False)
 
         # Enrich games with individual game details, and write to the JSON file
-        for game_file in pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'):
+        output_file: str = f'{config.prefix}{platform_name}.json'
+        output_file = pathlib.Path(config.output_path).joinpath(output_file)
+        if output_file.is_file():
+            pathlib.Path(output_file).unlink()
+
+        json_file_contents: list[str] = ['{\n  "games": [\n']
+
+        for game_file in (
+            pathlib.Path(config.cache).joinpath(f'{platform_id}/games/').glob('*.json')
+        ):
             with open(pathlib.Path(game_file), encoding='utf-8') as platform_request_cache:
                 cache: dict[str, Any] = json.loads(platform_request_cache.read())
 
-                output_file: str = f'{config.prefix}{platform_name}.json'
-                output_file = pathlib.Path(config.output_path).joinpath(output_file)
-
-                # Open the output JSON file and write the header
-                with open(pathlib.Path(output_file), 'w', encoding='utf-8-sig') as file:
-                    file.write('{\n  "games": [\n')
+                try:
+                    cache = decompress(cache)
+                except Exception:
+                    pass
 
                 # Add the game contents to the file
-                for i, game in enumerate(cache['games']):
-
-                    if pathlib.Path(
-                        f'cache/{platform_id}/games-details/{game['game_id']}.json'
-                    ).is_file():
+                for game in cache['games']:
+                    if (
+                        pathlib.Path(config.cache)
+                        .joinpath(f'{platform_id}/games-details/{game['game_id']}.json')
+                        .is_file()
+                    ):
                         with open(
-                            pathlib.Path(
-                                f'cache/{platform_id}/games-details/{game['game_id']}.json'
+                            pathlib.Path(config.cache).joinpath(
+                                f'{platform_id}/games-details/{game['game_id']}.json'
                             ),
                             encoding='utf-8',
                         ) as game_details_cache:
                             loaded_game_details: dict[str, Any] = json.load(game_details_cache)
+
+                            try:
+                                loaded_game_details = decompress(loaded_game_details)
+                            except Exception:
+                                pass
 
                             # Add the game details keys to the game
                             for key, values in loaded_game_details.items():
@@ -861,26 +988,29 @@ def write_output_files(
                             game = {'title': game.pop('title'), **game}
 
                             with open(pathlib.Path(output_file), 'a', encoding='utf-8-sig') as file:
-                                game_json: str = json.dumps(game, indent=2, ensure_ascii=False)
-
-                                if i + 1 < len(cache['games']):
-                                    game_json = f'{game_json},'
+                                game_json: str = (
+                                    f'{json.dumps(game, indent=2, ensure_ascii=False)},'
+                                )
 
                                 for line in game_json.split('\n'):
-                                    file.write(f'    {line}\n')
+                                    json_file_contents.append(f'    {line}\n')
 
-                # Close the file
-                with open(pathlib.Path(output_file), 'a', encoding='utf-8-sig') as file:
-                    file.write('  ]\n}\n')
+        # Write the file
+        json_file_contents = json_file_contents[:-1]
+        json_file_contents.append('    }\n  ]\n}\n')
+        with open(pathlib.Path(output_file), 'a', encoding='utf-8-sig') as file:
+            file.write(''.join(json_file_contents))
+
+        compress_files.append(pathlib.Path(output_file))
 
         eprint(
-            f'{Font.success}Finished processing titles. Writing output file... '
-            f'done.{Font.end}\n\n',
+            '• Finished processing titles. Writing JSON output file... done.',
             overwrite=True,
             wrap=False,
         )
+
     # Write the output files as delimiter separated value files
-    elif config.output_file_type == 1:
+    if config.output_file_type == 1 or config.output_file_type == 3:
         # Organize the data into separate tables for output, as Access can't
         # handle more than 255 columns of data, and the API returns data of
         # different shapes
@@ -892,9 +1022,16 @@ def write_output_files(
         game_ids: list[int] = []
         games_dataframe: pd.DataFrame = pd.DataFrame()
 
-        for game_file in pathlib.Path(f'cache/{platform_id}/games/').glob('*.json'):
+        for game_file in (
+            pathlib.Path(config.cache).joinpath(f'{platform_id}/games/').glob('*.json')
+        ):
             with open(pathlib.Path(game_file), encoding='utf-8') as platform_request_cache:
                 cache = json.loads(platform_request_cache.read())
+
+                try:
+                    cache = decompress(cache)
+                except Exception:
+                    pass
 
                 game_ids.extend([x[0] for x in get_game_ids_and_titles(cache)])
 
@@ -972,13 +1109,21 @@ def write_output_files(
         games_details: list[dict[str, Any]] = []
 
         for game_id in game_ids:
-            if pathlib.Path(f'cache/{platform_id}/games-details/{game_id}.json').is_file():
+            if (
+                pathlib.Path(config.cache)
+                .joinpath(f'{platform_id}/games-details/{game_id}.json')
+                .is_file()
+            ):
                 with open(
-                    pathlib.Path(f'cache/{platform_id}/games-details/{game_id}.json'),
+                    pathlib.Path(config.cache).joinpath(
+                        f'{platform_id}/games-details/{game_id}.json'
+                    ),
                     encoding='utf-8',
                 ) as games_details_cache:
                     try:
-                        games_details.append(json.load(games_details_cache))
+                        game_detail = decompress(json.load(games_details_cache))
+
+                        games_details.append(game_detail)
                     except Exception:
                         game_details: dict[str, Any] = api_request(
                             f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform_id}?api_key={config.api_key}',
@@ -987,20 +1132,28 @@ def write_output_files(
                         ).json()
 
                         with open(
-                            pathlib.Path(f'cache/{platform_id}/games-details/{game_id}.json'),
+                            pathlib.Path(config.cache).joinpath(
+                                f'{platform_id}/games-details/{game_id}.json'
+                            ),
                             'w',
                             encoding='utf-8',
                         ) as game_details_cache:
                             game_details_cache.write(
-                                json.dumps(game_details, separators=(',', ':'), ensure_ascii=False)
+                                json.dumps(
+                                    compress(game_details),
+                                    separators=(',', ':'),
+                                    ensure_ascii=False,
+                                )
                             )
+
+                        request_wait(config.rate_limit)
 
                         eprint(
                             f'• [Re-requesting details for game ID: {game_id}, as it seems to be corrupt... done.',
                             overwrite=True,
                         )
 
-                        games_details.append(json.load(games_details_cache))
+                        games_details.append(game_details)
 
         games_details = sorted(games_details, key=lambda x: x['game_id'])
 
@@ -1056,14 +1209,11 @@ def write_output_files(
         eprint('• Organizing game data... done.', indent=0, overwrite=True)
 
         # Write the output files
-        if update:
-            eprint('• Finished processing titles. Writing output files...', indent=0)
-        else:
-            eprint(
-                f'\n{Font.success}Finished processing titles. Writing output files...'
-                f'{Font.end}',
-                indent=0,
-            )
+        eprint(
+            '• Finished processing titles. Writing delimiter separated value output files...',
+            indent=0,
+            wrap=False,
+        )
 
         def write_file(dataframe: pd.DataFrame, output_file: str) -> None:
             # Sanitize the dataframe
@@ -1072,7 +1222,7 @@ def write_output_files(
             # Write to delimited file, using a BOM so Microsoft apps interpret the encoding correctly
             dataframe.to_csv(output_file, index=False, encoding='utf-8-sig', sep=config.delimiter)
 
-        file_platform_name: str = replace_invalid_characters(platform_name)
+            compress_files.append(pathlib.Path(output_file))
 
         output_path_prefix: pathlib.Path = pathlib.Path(config.output_path).joinpath(
             f'{config.prefix}{file_platform_name}'
@@ -1104,16 +1254,97 @@ def write_output_files(
         if len(ratings_dataframe.index) > 0:
             write_file(ratings_dataframe, f'{output_path_prefix} - Ratings.txt')
 
-        if update:
-            eprint(
-                '• Finished processing titles. Writing output files... done.\n\n',
-                indent=0,
-                overwrite=True,
-            )
-        else:
-            eprint(
-                f'{Font.success}Finished processing titles. Writing output files... '
-                f'done.{Font.end}',
-                overwrite=True,
-                wrap=False,
-            )
+        eprint(
+            '• Finished processing titles. Writing delimiter separated value output files... done.',
+            indent=0,
+            overwrite=True,
+            wrap=False,
+        )
+
+    if config.args.dropbox:
+        # Set the zip compression
+        compression: int = zipfile.ZIP_DEFLATED
+        zf = zipfile.ZipFile(f'{file_platform_name}.zip', mode='w')
+
+        # Add the files
+        for file in compress_files:
+            try:
+                zf.write(file, str(pathlib.Path(file.name)), compress_type=compression)
+                file.unlink()
+            except Exception:
+                pass
+
+        zf.close()
+
+        # Send the zip file to Dropbox
+        local_file = pathlib.Path(f'{file_platform_name}.zip')
+        dropbox_path = f'/{file_platform_name}.zip'
+
+        # Get an access token
+        if not config.dropbox_access_token:
+            response = get_dropbox_short_lived_token(config)
+
+        # Create an instance of a Dropbox class, which can make requests to the API
+        dbx = dropbox.Dropbox(json.loads(response.text)['access_token'])
+
+        # Check that the access token is valid
+        try:
+            dbx.users_get_current_account()
+        except AuthError:
+            try:
+                eprint(
+                    '• Invalid access token. Requesting a new short-lived access token...',
+                    level='warning',
+                    indent=0,
+                    wrap=False
+                )
+
+                response = get_dropbox_short_lived_token(config)
+                dbx = dropbox.Dropbox(json.loads(response.text)['access_token'])
+
+                eprint(
+                    '• Invalid access token. Requesting a new short-lived access token... done.',
+                    indent=0,
+                    wrap=False,
+                    overwite=True
+                )
+
+                dbx.users_get_current_account()
+            except Exception:
+                eprint(
+                    '• Invalid access token. Requesting a new short-lived access token didn\'t work.',
+                    level='error',
+                    indent=0,
+                    wrap=False
+                )
+                sys.exit(1)
+
+        # Upload the files to Dropbox
+        eprint(f'• Uploading {file_platform_name}.zip to Dropbox...')
+
+        with open(local_file, 'rb') as f:
+            try:
+                dbx.files_upload(f.read(), dropbox_path, mode=WriteMode('overwrite'))
+            except ApiError as err:
+                # Check that there's enough Dropbox space
+                if err.error.is_path() and err.error.get_path().error.is_insufficient_space():
+                    eprint(
+                        'Can\'t upload file, not enough space in the Dropbox account',
+                        level='error',
+                        indent=0,
+                    )
+                    sys.exit(1)
+                elif err.user_message_text:
+                    eprint(err.user_message_text, level='error', indent=0)
+                    sys.exit()
+                else:
+                    eprint(err, level='error', indent=0)
+                    sys.exit()
+            except Exception as err:
+                eprint(err, level='error', indent=0)
+                sys.exit()
+
+        eprint(f'• Uploading {file_platform_name}.zip to Dropbox... done.', overwrite=True)
+        local_file.unlink()
+
+    eprint(f'\n{Font.success}Processing complete{Font.end}\n')

@@ -68,6 +68,7 @@ def sanitize_dataframes(df: pd.core.frame.DataFrame) -> pd.core.frame.DataFrame:
         df.replace(['“', '”'], '"', regex=True)
         .replace(['‘', '’'], '\'', regex=True)  # noqa: RUF001
         .replace('×', 'x', regex=True)  # noqa: RUF001
+        .replace('…', '...', regex=True)
         .replace(['\u200b', '\u200c'], '', regex=True)
         .replace('\u00a0', ' ', regex=True)
     )

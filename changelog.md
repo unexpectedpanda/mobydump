@@ -1,5 +1,24 @@
 # Changelog
 
+# v0.8 (29 September 2024)
+
+- Breaking change: the `compress-json-python` library is now used to minify the cache and
+  make it even smaller, at the cost of compute time. Caches written by v0.8 and higher
+  aren't compatible with earlier versions of MobyDump.
+
+- You can now upload output files to DropBox instead of keeping them locally.
+
+- The cache file location can now be specified by the user.
+
+- Dropped the `sample_screenshots` key from the cache. This is because MobyGames
+  returns random contents in the array, which causes needless diffs that take up space
+  when a game is updated.
+
+- You can now output to both JSON and delimiter-separated value files instead of just one
+  when processing finishess.
+
+- Fixed JSON output.
+
 # v0.7 (25 September 2024)
 
 - MobyDump now outputs cache files with removed whitespace, which saves several hundred MB

@@ -21,7 +21,12 @@ def user_input() -> argparse.Namespace:
     )
 
     # Help text order is determined by the group order here
-    game_options: Any = parser.add_argument_group('flags that can be used with --games or --update')
+    game_platform_update_options: Any = parser.add_argument_group(
+        'flags that can be used with --platforms, --games, or --update'
+    )
+    game_update_options: Any = parser.add_argument_group(
+        'flags that can be used with --games or --update'
+    )
 
     parser.add_argument(
         '-h', '--help', '-?', action='help', default=argparse.SUPPRESS, help=argparse.SUPPRESS
@@ -59,19 +64,7 @@ def user_input() -> argparse.Namespace:
         '\n\n',
     )
 
-    parser.add_argument(
-        '-ua',
-        '--useragent',
-        metavar='"<USER_AGENT>"',
-        type=str,
-        help=f'R|Must be used with {Font.b}--games{Font.be}, {Font.b}--platforms{Font.be}, or {Font.b}--update{Font.be}.'
-        '\n\nChange the user agent MobyDump supplies when making requests.'
-        '\nDefaults to:'
-        f'\n\n{Font.b}MobyDump/{const.__version__}; https://github.com/unexpectedpanda/mobydump{Font.be}'
-        '\n\n',
-    )
-
-    game_options.add_argument(
+    game_update_options.add_argument(
         '-d',
         '--delimiter',
         metavar='"<DELIMITER>"',
@@ -82,7 +75,16 @@ def user_input() -> argparse.Namespace:
         '\n\n',
     )
 
-    game_options.add_argument(
+    game_update_options.add_argument(
+        '-db',
+        '--dropbox',
+        action='store_true',
+        help='R|ZIP the output files, upload them to Dropbox, and then delete the'
+        '\nlocal files.'
+        '\n\n',
+    )
+
+    game_update_options.add_argument(
         '-fr',
         '--forcerestart',
         action='store_true',
@@ -91,7 +93,7 @@ def user_input() -> argparse.Namespace:
         '\n\n',
     )
 
-    game_options.add_argument(
+    game_update_options.add_argument(
         '-o',
         '--output',
         metavar='<FILE_TYPE_ID>',
@@ -101,22 +103,23 @@ def user_input() -> argparse.Namespace:
         '\n\n0 - Don\'t output files'
         '\n1 - Delimiter separated value'
         '\n2 - JSON'
+        '\n3 - Delimiter separated value and JSON'
         '\n\nDelimiter separated value files are sanitized for problem'
         '\ncharacters, JSON data is left raw.'
         '\n\n',
     )
 
-    game_options.add_argument(
+    game_update_options.add_argument(
         '-pa',
         '--path',
-        metavar='<FOLDER_PATH>',
+        metavar='"<FOLDER_PATH>"',
         type=str,
         help='R|The folder to output files to. When not specified, defaults to'
         '\nMobyDump\'s directory.'
         '\n\n',
     )
 
-    game_options.add_argument(
+    game_update_options.add_argument(
         '-pr',
         '--prefix',
         metavar='"<PREFIX>"',
@@ -135,7 +138,7 @@ def user_input() -> argparse.Namespace:
         '\n\n',
     )
 
-    game_options.add_argument(
+    game_update_options.add_argument(
         '-r',
         '--ratelimit',
         metavar='<SECONDS_PER_REQUEST>',
@@ -151,6 +154,27 @@ def user_input() -> argparse.Namespace:
         '\n\n',
     )
 
+    game_platform_update_options.add_argument(
+        '-c',
+        '--cache',
+        metavar='"<CACHE_PATH>"',
+        type=str,
+        help=f'R|Change the cache path is. Defaults to {Font.b}cache{Font.be} in the same folder'
+        '\nMobyDump is in.'
+        '\n\n',
+    )
+
+    game_platform_update_options.add_argument(
+        '-ua',
+        '--useragent',
+        metavar='"<USER_AGENT>"',
+        type=str,
+        help=f'R|Change the user agent MobyDump supplies when making requests.'
+        '\nDefaults to:'
+        f'\n\n{Font.b}MobyDump/{const.__version__}; https://github.com/unexpectedpanda/mobydump{Font.be}'
+        '\n\n',
+    )
+
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)
@@ -162,6 +186,7 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Can\'t use {Font.b}--platforms{Font.be} and {Font.b}--games{Font.be} together. Exiting...',
             level='error',
+            wrap=False,
         )
         sys.exit(1)
 
@@ -169,6 +194,7 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Can\'t use {Font.b}--platforms{Font.be} and {Font.b}--update{Font.be} together. Exiting...',
             level='error',
+            wrap=False,
         )
         sys.exit(1)
 
@@ -176,6 +202,15 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Can\'t use {Font.b}--games{Font.be} and {Font.b}--update{Font.be} together. Exiting...',
             level='error',
+            wrap=False,
+        )
+        sys.exit(1)
+
+    if args.cache and not (args.games or args.platforms or args.update):
+        eprint(
+            f'Must specify {Font.b}--games{Font.be}, {Font.b}--platforms{Font.be}, or {Font.b}--update{Font.be} with {Font.b}--cache{Font.be}. Exiting...',
+            level='error',
+            wrap=False,
         )
         sys.exit(1)
 
@@ -183,6 +218,7 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Must specify {Font.b}--games{Font.be} or {Font.b}--update{Font.be} with {Font.b}--delimiter{Font.be}. Exiting...',
             level='error',
+            wrap=False,
         )
         sys.exit(1)
 
@@ -190,14 +226,16 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Must specify {Font.b}--games{Font.be} or {Font.b}--update{Font.be} with {Font.b}--output{Font.be}. Exiting...',
             level='error',
+            wrap=False,
         )
         sys.exit(1)
 
     if args.output:
-        if args.output > 2 or args.output < 0:
+        if args.output > 3 or args.output < 0:
             eprint(
-                'Valid file types are 0 (Don\'t output files), 1 (Delimiter separated value) or 2 (JSON). Exiting...',
+                'Valid file types are 0 (Don\'t output files), 1 (Delimiter separated value), 2 (JSON), or 3 (Delimiter separated value and JSON files). Exiting...',
                 level='error',
+                indent=0,
             )
             sys.exit(1)
 
@@ -205,6 +243,7 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Must specify {Font.b}--games{Font.be} or {Font.b}--update{Font.be} with {Font.b}--prefix{Font.be}. Exiting...',
             level='error',
+            wrap=False,
         )
         sys.exit(1)
 
@@ -212,6 +251,7 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Must specify {Font.b}--games{Font.be} or {Font.b}--update{Font.be} with {Font.b}--ratelimit{Font.be}. Exiting...',
             level='error',
+            wrap=False,
         )
         sys.exit(1)
 
@@ -219,6 +259,7 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Must specify {Font.b}--games{Font.be}, {Font.b}--platforms{Font.be}, or {Font.b}--update{Font.be} with {Font.b}--useragent{Font.be}. Exiting...',
             level='error',
+            warp=False,
         )
         sys.exit(1)
 

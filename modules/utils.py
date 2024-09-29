@@ -1,7 +1,9 @@
 import argparse
 import os
+import pathlib
 import platform
 import re
+import requests
 import sys
 import textwrap
 from typing import Any
@@ -12,12 +14,17 @@ class Config:
         self,
         args: argparse.Namespace,
         api_key: str,
+        dropbox_refresh_token: str,
+        dropbox_app_key: str,
+        dropbox_app_secret: str,
         rate_limit: int,
         headers: dict[str, str],
         output_file_type: int,
         output_path: str,
         prefix: str,
         delimiter: str,
+        cache: pathlib.Path,
+        dropbox_access_token: str = ''
     ) -> None:
         """
         Creates an object that contains internal config data.
@@ -25,6 +32,9 @@ class Config:
         Args:
             args (argparse.Namespace): The arguments passed in by the user.
             api_key (str): The MobyGames API key.
+            dropbox_refresh_token (str): The refresh token for your Dropbox app.
+            dropbox_app_key (str): The app key for your Dropbox app.
+            dropbox_app_secret (str): The app secret for your Dropbox app.
             rate_limit (int): The rate limit in seconds per request.
             headers (dict[str, str]): The headers to use in the API request.
             output_file_type (int): The type of file to output to. Options are:
@@ -34,15 +44,23 @@ class Config:
             output_path (str): The folder to write output files to.
             prefix (str): The prefix to add to the beginning of output filenames.
             delimiter (str): The single character delimiter to use in the output files.
+            cache (str): The path to the cache folder
+            dropbox_access_token (str): The short lived access token that's used to upload
+              files to Dropbox.
         """
         self.args = args
         self.api_key = api_key
+        self.dropbox_refresh_token = dropbox_refresh_token
+        self.dropbox_app_key = dropbox_app_key
+        self.dropbox_app_secret = dropbox_app_secret
+        self.dropbox_access_token = dropbox_access_token
         self.rate_limit = rate_limit
         self.headers = headers
         self.output_file_type = output_file_type
         self.output_path = output_path
         self.prefix = prefix
         self.delimiter = delimiter
+        self.cache = cache
 
 
 def enable_vt_mode() -> Any:
@@ -166,6 +184,19 @@ def eprint(
             f'{empty_lines}{Font.d}Press enter to continue{Font.end}', file=sys.stderr
         )
         input()
+
+
+def get_dropbox_short_lived_token(config):
+    data = {
+                'refresh_token': config.dropbox_refresh_token,
+                'grant_type': 'refresh_token',
+                'client_id': config.dropbox_app_key,
+                'client_secret': config.dropbox_app_secret,
+            }
+
+    response = requests.post('https://api.dropbox.com/oauth2/token', data=data)
+
+    return response
 
 
 def old_windows() -> bool:

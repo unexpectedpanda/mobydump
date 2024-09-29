@@ -13,7 +13,7 @@ import os
 import pathlib
 import sys
 
-from dotenv import load_dotenv  # type: ignore
+from dotenv import load_dotenv
 
 import modules.constants as const
 from modules.get_mg_data import (
@@ -50,21 +50,30 @@ load_dotenv()
 
 def main() -> None:
     if os.getenv('MOBY_API'):
-        eprint('\n', wrap=False)
-        eprint(r' /~~~~~~~~~~~~~)', wrap=False)
-        eprint(r'(                )', wrap=False)
-        eprint(r'\        (o)      )', wrap=False)
-        eprint(r' \______/          )', wrap=False)
-        eprint(r'     \____          )', wrap=False)
-        eprint(r'    ___ __\       )', wrap=False)
-        eprint(r'   /_/\_\____    )  ', wrap=False)
-        eprint(r'   __       /  /', wrap=False)
-        eprint(r'   \ \_____/  /', wrap=False)
-        eprint(r'   / ________/   ', wrap=False)
-        eprint(f'  /_/ MOBYDUMP {const.__version__}\n', wrap=False)
 
         # Get user input
         args = user_input()
+
+        # Set the DropBox token and app key
+        dropbox_refresh_token: str = ''
+        dropbox_app_key: str = ''
+        dropbox_app_secret: str = ''
+
+        if args.dropbox:
+            if os.getenv('DROPBOX_REFRESH_TOKEN') and os.getenv('DROPBOX_APP_KEY') and os.getenv('DROPBOX_APP_SECRET'):
+                dropbox_refresh_token = os.getenv('DROPBOX_REFRESH_TOKEN')
+                dropbox_app_key = os.getenv('DROPBOX_APP_KEY')
+                dropbox_app_secret = os.getenv('DROPBOX_APP_SECRET')
+            else:
+                eprint(
+                    '\nMobyDump needs a DropBox app key, app secret, and refresh token to continue. For'
+                    '\ninstructions, see tools/get_dropbox_refresh_token.py.'
+                    '\n\nExiting...',
+                    level='error',
+                    indent=0,
+                    wrap=False,
+                )
+                sys.exit(1)
 
         # Get the API key
         api_key: str = html.escape(str(os.getenv('MOBY_API')))
@@ -76,6 +85,12 @@ def main() -> None:
 
         if args.useragent:
             user_agent = str(args.useragent)
+
+        # Set the cache path
+        cache_path: pathlib.Path = pathlib.Path('cache')
+
+        if args.cache:
+            cache_path = pathlib.Path(args.cache)
 
         # Set the rate limit
         rate_limit: int = 10
@@ -132,8 +147,32 @@ def main() -> None:
 
         # Create the config object instance
         config: Config = Config(
-            args, api_key, rate_limit, headers, output_file_type, output_path, prefix, delimiter
+            args,
+            api_key,
+            dropbox_refresh_token,
+            dropbox_app_key,
+            dropbox_app_secret,
+            rate_limit,
+            headers,
+            output_file_type,
+            output_path,
+            prefix,
+            delimiter,
+            cache_path,
         )
+
+        eprint('\n', wrap=False)
+        eprint(r' /~~~~~~~~~~~~~)', wrap=False)
+        eprint(r'(                )', wrap=False)
+        eprint(r'\        (o)      )', wrap=False)
+        eprint(r' \______/          )', wrap=False)
+        eprint(r'     \____          )', wrap=False)
+        eprint(r'    ___ __\       )', wrap=False)
+        eprint(r'   /_/\_\____    )  ', wrap=False)
+        eprint(r'   __       /  /', wrap=False)
+        eprint(r'   \ \_____/  /', wrap=False)
+        eprint(r'   / ________/   ', wrap=False)
+        eprint(f'  /_/ MOBYDUMP {const.__version__}\n', wrap=False)
 
         # ================================================================================
         # Get platforms if requested by the user
@@ -173,11 +212,13 @@ def main() -> None:
             platform_name: str = f'platform {platform_id!s}'
             raw_platform_name: str = ''
 
-            if not pathlib.Path('cache/platforms.json').is_file():
+            if not pathlib.Path(config.cache).joinpath('platforms.json').is_file():
                 get_platforms(config)
                 request_wait(config.rate_limit)
 
-            with open(pathlib.Path('cache/platforms.json'), encoding='utf-8') as platform_cache:
+            with open(
+                pathlib.Path(config.cache).joinpath('platforms.json'), encoding='utf-8'
+            ) as platform_cache:
                 cached_platforms = json.load(platform_cache)
 
                 for cached_platform in cached_platforms['platforms']:
@@ -187,8 +228,12 @@ def main() -> None:
                         raw_platform_name = cached_platform['platform_name']
 
             # Set up the cache folders
-            pathlib.Path(f'cache/{platform_id}/games').mkdir(parents=True, exist_ok=True)
-            pathlib.Path(f'cache/{platform_id}/games-details').mkdir(parents=True, exist_ok=True)
+            pathlib.Path(config.cache).joinpath(f'{platform_id}/games').mkdir(
+                parents=True, exist_ok=True
+            )
+            pathlib.Path(config.cache).joinpath(f'{platform_id}/games-details').mkdir(
+                parents=True, exist_ok=True
+            )
 
             # Read the requests status file if it exists
             now = (
@@ -203,9 +248,10 @@ def main() -> None:
                 'last_updated': now.strftime("%Y/%m/%d"),
             }
 
-            if pathlib.Path(f'cache/{platform_id}/status.json').is_file():
+            if pathlib.Path(config.cache).joinpath(f'{platform_id}/status.json').is_file():
                 with open(
-                    pathlib.Path(f'cache/{platform_id}/status.json'), encoding='utf-8'
+                    pathlib.Path(config.cache).joinpath(f'{platform_id}/status.json'),
+                    encoding='utf-8',
                 ) as status_cache:
                     try:
                         completion_status = json.load(status_cache)
@@ -229,7 +275,7 @@ def main() -> None:
                         eprint('')
 
             if resume == 'r' or args.forcerestart:
-                completion_status = delete_cache(platform_id)
+                completion_status = delete_cache(platform_id, config)
             elif resume == 'q':
                 sys.exit()
 
@@ -249,7 +295,7 @@ def main() -> None:
         # ================================================================================
 
         # Set up the cache folder
-        pathlib.Path('cache/updates').mkdir(parents=True, exist_ok=True)
+        pathlib.Path(config.cache).joinpath('updates').mkdir(parents=True, exist_ok=True)
 
         if config.args.update:
             get_updates(config)
