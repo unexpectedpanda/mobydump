@@ -1348,4 +1348,3 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
         local_file.unlink()
 
     eprint(f'\n{Font.success}Processing complete{Font.end}\n')
-    sys.exit()
