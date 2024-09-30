@@ -8,8 +8,11 @@ from dotenv import load_dotenv
 # Get the contents of the .env file
 load_dotenv()
 
-# 1. Initial setup: get your app key and secret from https://www.dropbox.com/developers/apps.
-# 2. Add them to DROPBOX_APP_KEY and DROPBOX_APP_SECRET in the .env file.
+# Initial setup:
+#
+# 1. Get your app key and secret from https://www.dropbox.com/developers/apps.
+# 2. Add them to DROPBOX_APP_KEY and DROPBOX_APP_SECRET in the same .env file you stored
+#    MOBY_API in.
 # 3. Visit the following URL, replacing the <DROPBOX_APP_KEY> value:
 #
 #    https://www.dropbox.com/oauth2/authorize?client_id=<DROPBOX_APP_KEY>&response_type=code&token_access_type=offline
@@ -24,10 +27,10 @@ if os.getenv('DROPBOX_ACCESS_CODE') and os.getenv('DROPBOX_APP_KEY') and os.gete
     dropbox_app_key = str(os.getenv('DROPBOX_APP_KEY'))
     dropbox_app_secret = str(os.getenv('DROPBOX_APP_SECRET'))
 
-    BASIC_AUTH = base64.b64encode(f'{dropbox_app_key}:{dropbox_app_secret}'.encode())
+    basic_auth = base64.b64encode(f'{dropbox_app_key}:{dropbox_app_secret}'.encode())
 
     headers = {
-        'Authorization': f"Basic {BASIC_AUTH}",
+        'Authorization': f"Basic {basic_auth}",
         'Content-Type': 'application/x-www-form-urlencoded',
     }
 
