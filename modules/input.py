@@ -94,6 +94,15 @@ def user_input() -> argparse.Namespace:
     )
 
     game_update_options.add_argument(
+        '-n',
+        '--noninteractive',
+        action='store_true',
+        help=f'R|Make MobyDump output less chatty for non-interactive terminals, so'
+        '\nlogs don\'t get out of control.'
+        '\n\n',
+    )
+
+    game_update_options.add_argument(
         '-o',
         '--output',
         metavar='<FILE_TYPE_ID>',

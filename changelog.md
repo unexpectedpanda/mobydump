@@ -10,6 +10,8 @@
 
 - The cache file location can now be specified by the user.
 
+- Added a non-interactive mode to cut down on screen output for logging.
+
 - Dropped the `sample_screenshots` key from the cache. This is because MobyGames
   returns random contents in the array, which causes needless diffs that take up space
   when a game is updated.

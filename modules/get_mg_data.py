@@ -152,7 +152,7 @@ def get_games(
     while True:
         # Wait for the rate limit after the first request
         if i > 0:
-            request_wait(config.rate_limit)
+            request_wait(config)
         else:
             i += 1
 
@@ -166,7 +166,7 @@ def get_games(
 
             game_dict: dict[str, Any] = api_request(
                 f'https://api.mobygames.com/v1/games?api_key={config.api_key}&platform={platform_id}&offset={offset}&limit={offset_increment}',
-                config.headers,
+                config,
                 message=f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting titles {offset}-{offset+offset_increment}...',
             ).json()
 
@@ -311,7 +311,7 @@ def get_game_details(
 
                 game_details: dict[str, Any] = api_request(
                     f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform_id}?api_key={config.api_key}',
-                    config.headers,
+                    config,
                     message=f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})...',
                 ).json()
 
@@ -340,7 +340,7 @@ def get_game_details(
                     wrap=False,
                 )
 
-                request_wait(config.rate_limit)
+                request_wait(config)
 
     # Write the completion status
     completion_status['stage_2_finished'] = True
@@ -392,7 +392,7 @@ def get_platforms(config: Config) -> dict[str, list[dict[str, str | int]]]:
     """
     platforms: dict[str, list[dict[str, str | int]]] = api_request(
         f'https://api.mobygames.com/v1/platforms?api_key={config.api_key}',
-        config.headers,
+        config,
         message='• Retrieving platforms...',
     ).json()
 
@@ -490,7 +490,7 @@ def get_updates(config: Config) -> None:
         while True:
             # Wait for the rate limit after the first request
             if i > 0:
-                request_wait(config.rate_limit)
+                request_wait(config)
             else:
                 i += 1
 
@@ -503,7 +503,7 @@ def get_updates(config: Config) -> None:
 
             game_dict: dict[str, Any] = api_request(
                 f'https://api.mobygames.com/v1/games/recent?api_key={config.api_key}&format=normal&age={config.args.update}&offset={offset}&limit={offset_increment}',
-                config.headers,
+                config,
                 message=f'• [{now.strftime("%H:%M:%S")}] Requesting updated titles {offset}-{offset+offset_increment}...',
             ).json()
 
@@ -566,7 +566,7 @@ def get_updates(config: Config) -> None:
         # Get the platform IDs
         if not pathlib.Path(config.cache).joinpath('platforms.json').is_file():
             get_platforms(config)
-            request_wait(config.rate_limit)
+            request_wait(config)
 
         platforms: dict[str, int] = {}
 
@@ -841,7 +841,7 @@ def get_updates(config: Config) -> None:
 
                                 game_details: dict[str, Any] = api_request(
                                     f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform["platform_id"]}?api_key={config.api_key}',
-                                    config.headers,
+                                    config,
                                     message=f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})...',
                                 ).json()
 
@@ -872,7 +872,7 @@ def get_updates(config: Config) -> None:
                                     wrap=False,
                                 )
 
-                                request_wait(config.rate_limit)
+                                request_wait(config)
 
                         if removed_game_ids:
                             eprint(
@@ -1127,7 +1127,7 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
                     except Exception:
                         game_details: dict[str, Any] = api_request(
                             f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform_id}?api_key={config.api_key}',
-                            config.headers,
+                            config,
                             message=f'• [Re-requesting details for game ID: {game_id}, as it seems to be corrupt...',
                         ).json()
 
@@ -1146,7 +1146,7 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
                                 )
                             )
 
-                        request_wait(config.rate_limit)
+                        request_wait(config)
 
                         eprint(
                             f'• [Re-requesting details for game ID: {game_id}, as it seems to be corrupt... done.',
@@ -1348,3 +1348,4 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
         local_file.unlink()
 
     eprint(f'\n{Font.success}Processing complete{Font.end}\n')
+    sys.exit()

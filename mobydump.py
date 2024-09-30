@@ -214,7 +214,7 @@ def main() -> None:
 
             if not pathlib.Path(config.cache).joinpath('platforms.json').is_file():
                 get_platforms(config)
-                request_wait(config.rate_limit)
+                request_wait(config)
 
             with open(
                 pathlib.Path(config.cache).joinpath('platforms.json'), encoding='utf-8'

@@ -3,11 +3,11 @@ from time import gmtime, sleep, strftime
 
 import requests
 
-from modules.utils import eprint
+from modules.utils import Config, eprint
 
 
 def api_request(
-    url: str, headers: dict[str:str], message: str = '', timeout: int = 0
+    url: str, config: Config, message: str = '', timeout: int = 0
 ) -> requests.models.Response:
     """
     Requests data from the MobyGames API.
@@ -15,7 +15,7 @@ def api_request(
     Args:
         url (str): The URL to query, including query strings.
 
-        headers (str): The headers for the request.
+        config (Config): The MobyDump config object instance.
 
         message (str): The message to print to screen.
 
@@ -28,15 +28,15 @@ def api_request(
     try:
         eprint(message, wrap=False)
 
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=config.headers)
 
         response.raise_for_status()
     except requests.exceptions.Timeout:
-        response = request_retry(url, headers, message, timeout, 'Timeout.')
+        response = request_retry(url, config, message, timeout, 'Timeout.')
     except requests.ConnectionError:
         response = request_retry(
             url,
-            headers,
+            config,
             message,
             timeout,
             'Can\'t connect to the MobyGames API, maybe the internet has dropped?',
@@ -61,7 +61,7 @@ def api_request(
         elif err.response.status_code == 429 or 'Too Many Requests for url' in str(err):
             response = request_retry(
                 url,
-                headers,
+                config,
                 message,
                 timeout,
                 'Rate limited (429). Too many requests in too short a time.',
@@ -71,7 +71,7 @@ def api_request(
             # if this happens.
             response = request_retry(
                 url,
-                headers,
+                config,
                 message,
                 timeout,
                 'Internal server error (500). Assuming the issue\'s ephemeral.',
@@ -80,7 +80,7 @@ def api_request(
             # Sometimes MobyGames throws a 502. Attempt a retry if this happens.
             response = request_retry(
                 url,
-                headers,
+                config,
                 message,
                 timeout,
                 'Bad gateway error (502). Assuming the issue\'s ephemeral.',
@@ -88,7 +88,7 @@ def api_request(
         elif err.response.status_code == 503:
             response = request_retry(
                 url,
-                headers,
+                config,
                 message,
                 timeout,
                 'Service unavailable (503). Assuming the issue\'s ephemeral.',
@@ -96,7 +96,7 @@ def api_request(
         elif err.response.status_code == 504:
             response = request_retry(
                 url,
-                headers,
+                config,
                 message,
                 timeout,
                 'Gateway timeout for URL (504). Assuming the issue\'s ephemeral.',
@@ -104,7 +104,7 @@ def api_request(
         elif err.response.status_code == 520:
             response = request_retry(
                 url,
-                headers,
+                config,
                 message,
                 timeout,
                 'Cloudflare: Web server returned an unknown error (520). Assuming the issue\'s ephemeral.',
@@ -112,7 +112,7 @@ def api_request(
         elif err.response.status_code == 522 or err.response.status_code == 524:
             response = request_retry(
                 url,
-                headers,
+                config,
                 message,
                 timeout,
                 f'Cloudflare: Origin server timed out ({err.response.status_code}). Assuming the issue\'s ephemeral.',
@@ -125,7 +125,7 @@ def api_request(
 
 
 def request_retry(
-    url: str, headers: dict[str, str], message: str, timeout: int, error_message: str
+    url: str, config: Config, message: str, timeout: int, error_message: str
 ) -> requests.models.Response:
     """
     Retries a request if a timeout has occurred.
@@ -133,7 +133,7 @@ def request_retry(
     Args:
         url (str): The URL to query, including query strings.
 
-        headers (str): The headers for the request.
+        config (Config): The MobyDump config object instance.
 
         message (str): The message to print to screen.
 
@@ -152,6 +152,8 @@ def request_retry(
     response: requests.models.Response = requests.models.Response()
     response.status_code = 418
 
+    non_interactive_output: bool = False
+
     while response.status_code != 200:
         if progressive_timeout[timeout] == -1:
             eprint(
@@ -163,30 +165,39 @@ def request_retry(
             sys.exit(1)
         else:
             for j in range(progressive_timeout[timeout]):
-                eprint(
-                    f'• {error_message} Retry #{timeout} in {strftime("%H:%M:%S", gmtime(progressive_timeout[timeout] - j))}...',
-                    level='warning',
-                    overwrite=True,
-                    wrap=False,
-                )
+                if not non_interactive_output:
+                    eprint(
+                        f'• {error_message} Retry #{timeout} in {strftime("%H:%M:%S", gmtime(progressive_timeout[timeout] - j))}...',
+                        level='warning',
+                        overwrite=True,
+                        wrap=False,
+                    )
+                if config.args.noninteractive:
+                    non_interactive_output = True
                 sleep(1)
 
         timeout += 1
 
-        response = api_request(url, headers, message, timeout)
+        response = api_request(url, config, message, timeout)
 
     return response
 
 
-def request_wait(rate_limit: int) -> None:
+def request_wait(config: Config) -> None:
     """
     A countdown timer that limits the rate of requests.
 
     Args:
         rate_limit (int): How many seconds to wait between requests.
     """
-    for i in range(rate_limit):
-        eprint(f'• Waiting {rate_limit-i} seconds until next request...', overwrite=True)
+    non_interactive_output: bool = False
+
+    for i in range(config.rate_limit):
+        if not non_interactive_output:
+            eprint(f'• Waiting {config.rate_limit-i} seconds until next request...', overwrite=True)
+
+        if config.args.noninteractive:
+            non_interactive_output = True
         sleep(1)
 
     # Delete the previous line printed to screen
