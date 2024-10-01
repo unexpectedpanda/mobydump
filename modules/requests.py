@@ -125,6 +125,14 @@ def api_request(
                 timeout,
                 f'Cloudflare: SSL handshake failed ({err.response.status_code}). Assuming the issue\'s ephemeral.',
             )
+        elif str(err.response.status_code).startswith('5'):
+            response = request_retry(
+                url,
+                config,
+                message,
+                timeout,
+                f'Server error ({err.response.status_code}). Assuming the issue\'s ephemeral.',
+            )
         else:
             eprint(f'\n{err}', level='error', indent=0)
             sys.exit(1)
