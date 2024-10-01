@@ -983,7 +983,7 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
         eprint('• Finished processing titles. Writing JSON output file...', indent=0, wrap=False)
 
         # Enrich games with individual game details, and write to the JSON file
-        output_file: str = f'{config.prefix}{platform_name}.json'
+        output_file: str = f'{config.prefix}{file_platform_name}.json'
         output_file = pathlib.Path(config.output_path).joinpath(output_file)
         if output_file.is_file():
             pathlib.Path(output_file).unlink()
