@@ -1376,7 +1376,7 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
                 sys.exit(1)
 
         # Upload the files to Dropbox
-        eprint(f'• Uploading {file_platform_name}.zip to Dropbox...')
+        eprint(f'• Uploading {Font.b}{file_platform_name}.zip{Font.be} to Dropbox...')
 
         with open(local_file, 'rb') as f:
             try:
@@ -1400,7 +1400,7 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
                 eprint(err, level='error', indent=0)
                 sys.exit()
 
-        eprint(f'• Uploading {file_platform_name}.zip to Dropbox... done.', overwrite=True)
+        eprint(f'• Uploading {Font.b}{file_platform_name}.zip{Font.be} to Dropbox... done.', overwrite=True)
         local_file.unlink()
 
     eprint(f'\n{Font.success}Processing complete{Font.end}\n')
