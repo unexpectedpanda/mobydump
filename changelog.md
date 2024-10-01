@@ -19,6 +19,10 @@
 - You can now output to both JSON and delimiter-separated value files instead of just one
   when processing finishess.
 
+- A time estimate is now given for completion of stage two.
+
+- MobyGames' stripped down platform names now have manufacturers added.
+
 - Fixed JSON output.
 
 # v0.7 (25 September 2024)

@@ -16,7 +16,7 @@ from dropbox.exceptions import ApiError, AuthError
 from dropbox.files import WriteMode
 from natsort import natsorted
 
-from modules.data_sanitize import replace_invalid_characters, sanitize_dataframes
+from modules.data_sanitize import better_platform_name, replace_invalid_characters, sanitize_dataframes
 from modules.requests import api_request, request_wait
 from modules.utils import Config, Font, eprint, get_dropbox_short_lived_token
 
@@ -112,8 +112,12 @@ def get_games(
     """
     now: datetime.datetime
 
+    platform_str_length: int = len(f'Retrieving games from {platform_name}')
+    horizontal_line_length: int = int((80 - platform_str_length - 10)/2)
+    horizontal_line: str = '─'*horizontal_line_length
+
     eprint(
-        f'{Font.b}─────────────── Retrieving games from {platform_name} ───────────────{Font.be}\n'
+        f'{Font.b}{horizontal_line} Retrieving games from {platform_name} {horizontal_line}{Font.be}\n'
     )
     eprint(f'{Font.b}{Font.u}Stage 1{Font.end}')
     eprint(
@@ -240,9 +244,13 @@ def get_game_details(
     """
     now: datetime.datetime
 
+    platform_str_length: int = len(f'Retrieving games from {platform_name}')
+    horizontal_line_length: int = int((80 - platform_str_length - 10)/2)
+    horizontal_line: str = '─'*horizontal_line_length
+
     if list(pathlib.Path(config.cache).joinpath(f'{platform_id}/games-details/').glob('*.json')):
         eprint(
-            f'{Font.b}─────────────── Retrieving games from {platform_name} ⎯⎯⎯⎯⎯──────────{Font.be}'
+            f'{Font.b}{horizontal_line} Retrieving games from {platform_name} {horizontal_line}{Font.be}'
         )
 
     eprint(
@@ -440,6 +448,9 @@ def get_platforms(config: Config) -> dict[str, list[dict[str, str | int]]]:
         config,
         message='• Retrieving platforms...',
     ).json()
+
+    for platform in platforms['platforms']:
+        platform['platform_name'] = better_platform_name(platform['platform_name'])
 
     eprint('• Retrieving platforms... done.', overwrite=True)
 

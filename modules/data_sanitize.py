@@ -1,7 +1,21 @@
+import json
+import pathlib
 import re
 
 import numpy as np
 import pandas as pd
+
+def better_platform_name(platform_name: str) -> str:
+
+    better_platform_names: dict[str, str] = {}
+
+    with open(pathlib.Path('platforms.json'), encoding='utf-8') as better_platforms:
+        better_platform_names = json.loads(better_platforms.read())
+
+    if platform_name in better_platform_names:
+        platform_name = better_platform_names[platform_name]
+
+    return platform_name
 
 
 def replace_invalid_characters(name: str) -> str:
