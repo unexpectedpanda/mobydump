@@ -3,10 +3,11 @@ import os
 import pathlib
 import platform
 import re
-import requests
 import sys
 import textwrap
 from typing import Any
+
+import requests
 
 
 class Config:
@@ -24,7 +25,8 @@ class Config:
         prefix: str,
         delimiter: str,
         cache: pathlib.Path,
-        dropbox_access_token: str = ''
+        dropbox_access_token: str = '',
+        time_estimate_given: bool = False,
     ) -> None:
         """
         Creates an object that contains internal config data.
@@ -47,6 +49,8 @@ class Config:
             cache (str): The path to the cache folder
             dropbox_access_token (str): The short lived access token that's used to upload
               files to Dropbox.
+            time_estimate_given (bool): Whether the user has been given an estimate for
+              the second stage completion.
         """
         self.args = args
         self.api_key = api_key
@@ -61,6 +65,7 @@ class Config:
         self.prefix = prefix
         self.delimiter = delimiter
         self.cache = cache
+        self.time_estimate_given = time_estimate_given
 
 
 def enable_vt_mode() -> Any:
@@ -188,11 +193,11 @@ def eprint(
 
 def get_dropbox_short_lived_token(config):
     data = {
-                'refresh_token': config.dropbox_refresh_token,
-                'grant_type': 'refresh_token',
-                'client_id': config.dropbox_app_key,
-                'client_secret': config.dropbox_app_secret,
-            }
+        'refresh_token': config.dropbox_refresh_token,
+        'grant_type': 'refresh_token',
+        'client_id': config.dropbox_app_key,
+        'client_secret': config.dropbox_app_secret,
+    }
 
     response = requests.post('https://api.dropbox.com/oauth2/token', data=data)
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 import datetime
 import json
 import pathlib
-import requests
 import sys
 import zipfile
 from typing import Any
@@ -303,6 +302,52 @@ def get_game_details(
                 .joinpath(f'{platform_id}/games-details/{game_id}.json')
                 .is_file()
             ):
+                if not config.time_estimate_given:
+                    eta: datetime.timedelta = datetime.timedelta(
+                        seconds=(game_count - game_iterator) * (config.rate_limit + 1)
+                    )
+
+                    eta_list: list[str] = []
+                    eta_string: str = ''
+
+                    if eta.days:
+                        eta_list.append(f'{eta.days!s} days')
+                    if int(str(eta)[-8:-6]) != 0:
+                        eta_hours: str = str(eta)[-8:-6]
+
+                        if eta_hours.startswith('0'):
+                            eta_hours = eta_hours[1:]
+
+                        eta_list.append(f'{eta_hours} hours')
+                    if int(str(eta)[-5:-3]) != 0:
+                        eta_minutes: str = str(eta)[-5:-3]
+
+                        if eta_minutes.startswith('0'):
+                            eta_minutes = eta_minutes[1:]
+
+                        eta_list.append(f'{eta_minutes} minutes')
+                    if int(str(eta)[-2:]) != 0:
+                        eta_seconds: str = str(eta)[-2:]
+
+                        if eta_seconds.startswith('0'):
+                            eta_seconds = eta_seconds[1:]
+
+                        eta_list.append(f'{eta_seconds} seconds')
+
+                    if len(eta_list) > 2:
+                        eta_list[-1] = f'and {eta_list[-1]}'
+
+                        eta_string = ', '.join(eta_list)
+                    elif len(eta_list) == 2:
+                        eta_list[-1] = f' and {eta_list[-1]}'
+                        eta_string = ''.join(eta_list)
+                    else:
+                        eta_string = ''.join(eta_list)
+
+                    eprint(f'{Font.heading}• Estimated completion time: {eta_string}{Font.end}')
+
+                    config.time_estimate_given = True
+
                 now = (
                     datetime.datetime.now(tz=datetime.timezone.utc)
                     .replace(tzinfo=datetime.timezone.utc)
@@ -1296,7 +1341,7 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
                     '• Invalid access token. Requesting a new short-lived access token...',
                     level='warning',
                     indent=0,
-                    wrap=False
+                    wrap=False,
                 )
 
                 response = get_dropbox_short_lived_token(config)
@@ -1306,7 +1351,7 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
                     '• Invalid access token. Requesting a new short-lived access token... done.',
                     indent=0,
                     wrap=False,
-                    overwite=True
+                    overwrite=True,
                 )
 
                 dbx.users_get_current_account()
@@ -1315,7 +1360,7 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
                     '• Invalid access token. Requesting a new short-lived access token didn\'t work.',
                     level='error',
                     indent=0,
-                    wrap=False
+                    wrap=False,
                 )
                 sys.exit(1)
 

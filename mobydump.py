@@ -60,10 +60,14 @@ def main() -> None:
         dropbox_app_secret: str = ''
 
         if args.dropbox:
-            if os.getenv('DROPBOX_REFRESH_TOKEN') and os.getenv('DROPBOX_APP_KEY') and os.getenv('DROPBOX_APP_SECRET'):
-                dropbox_refresh_token = os.getenv('DROPBOX_REFRESH_TOKEN')
-                dropbox_app_key = os.getenv('DROPBOX_APP_KEY')
-                dropbox_app_secret = os.getenv('DROPBOX_APP_SECRET')
+            if (
+                os.getenv('DROPBOX_REFRESH_TOKEN')
+                and os.getenv('DROPBOX_APP_KEY')
+                and os.getenv('DROPBOX_APP_SECRET')
+            ):
+                dropbox_refresh_token = str(os.getenv('DROPBOX_REFRESH_TOKEN'))
+                dropbox_app_key = str(os.getenv('DROPBOX_APP_KEY'))
+                dropbox_app_secret = str(os.getenv('DROPBOX_APP_SECRET'))
             else:
                 eprint(
                     '\nMobyDump needs a DropBox app key, app secret, and refresh token to continue. For'

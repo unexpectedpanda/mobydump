@@ -117,6 +117,14 @@ def api_request(
                 timeout,
                 f'Cloudflare: Origin server timed out ({err.response.status_code}). Assuming the issue\'s ephemeral.',
             )
+        elif err.response.status_code == 525:
+            response = request_retry(
+                url,
+                config,
+                message,
+                timeout,
+                f'Cloudflare: SSL handshake failed ({err.response.status_code}). Assuming the issue\'s ephemeral.',
+            )
         else:
             eprint(f'\n{err}', level='error', indent=0)
             sys.exit(1)
@@ -188,7 +196,7 @@ def request_wait(config: Config) -> None:
     A countdown timer that limits the rate of requests.
 
     Args:
-        rate_limit (int): How many seconds to wait between requests.
+        config (Config): The MobyDump config object instance.
     """
     non_interactive_output: bool = False
 

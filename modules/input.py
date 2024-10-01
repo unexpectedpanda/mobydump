@@ -97,7 +97,7 @@ def user_input() -> argparse.Namespace:
         '-n',
         '--noninteractive',
         action='store_true',
-        help=f'R|Make MobyDump output less chatty for non-interactive terminals, so'
+        help='R|Make MobyDump output less chatty for non-interactive terminals, so'
         '\nlogs don\'t get out of control.'
         '\n\n',
     )
