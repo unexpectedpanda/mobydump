@@ -110,10 +110,10 @@ def user_input() -> argparse.Namespace:
         help=f'R|The file type to output to. When not specified, defaults to {Font.b}1{Font.be}.'
         f'\nChoose a number from the following list:'
         '\n\n0 - Don\'t output files'
-        '\n1 - Delimiter separated value'
+        '\n1 - Delimiter-separated value'
         '\n2 - JSON'
-        '\n3 - Delimiter separated value and JSON'
-        '\n\nDelimiter separated value files are sanitized for problem'
+        '\n3 - Delimiter-separated value and JSON'
+        '\n\nDelimiter-separated value files are sanitized for problem'
         '\ncharacters, JSON data is left raw.'
         '\n\n',
     )
@@ -242,7 +242,7 @@ def user_input() -> argparse.Namespace:
     if args.output:
         if args.output > 3 or args.output < 0:
             eprint(
-                'Valid file types are 0 (Don\'t output files), 1 (Delimiter separated value), 2 (JSON), or 3 (Delimiter separated value and JSON files). Exiting...',
+                'Valid file types are 0 (Don\'t output files), 1 (Delimiter-separated value), 2 (JSON), or 3 (Delimiter-separated value and JSON files). Exiting...',
                 level='error',
                 indent=0,
             )

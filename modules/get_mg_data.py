@@ -1076,7 +1076,7 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
             wrap=False,
         )
 
-    # Write the output files as delimiter separated value files
+    # Write the output files as delimiter-separated value files
     if config.output_file_type == 1 or config.output_file_type == 3:
         # Organize the data into separate tables for output, as Access can't
         # handle more than 255 columns of data, and the API returns data of
@@ -1277,7 +1277,7 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
 
         # Write the output files
         eprint(
-            '• Finished processing titles. Writing delimiter separated value output files...',
+            '• Finished processing titles. Writing delimiter-separated value output files...',
             indent=0,
             wrap=False,
         )
@@ -1322,7 +1322,7 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
             write_file(ratings_dataframe, f'{output_path_prefix} - Ratings.txt')
 
         eprint(
-            '• Finished processing titles. Writing delimiter separated value output files... done.',
+            '• Finished processing titles. Writing delimiter-separated value output files... done.',
             indent=0,
             overwrite=True,
             wrap=False,

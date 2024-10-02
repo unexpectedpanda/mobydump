@@ -214,11 +214,11 @@ Flags that can be used with `--games` or `--update`:
                         Choose a number from the following list:
 
                         0 - Don't output files
-                        1 - Delimiter separated value
+                        1 - Delimiter-separated value
                         2 - JSON
-                        3 - Delimiter separated value and JSON
+                        3 - Delimiter-separated value and JSON
 
-                        Delimiter separated value files are sanitized for problem
+                        Delimiter-separated value files are sanitized for problem
                         characters, JSON data is left raw.
 
   -pa "<FOLDER_PATH>", --path "<FOLDER_PATH>"

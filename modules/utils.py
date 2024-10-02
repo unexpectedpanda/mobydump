@@ -41,8 +41,9 @@ class Config:
             headers (dict[str, str]): The headers to use in the API request.
             output_file_type (int): The type of file to output to. Options are:
                 0 - Don't output files
-                1 - Delimiter separated value
+                1 - Delimiter-separated value
                 2 - JSON
+                3 - Delimiter-separated value and JSON
             output_path (str): The folder to write output files to.
             prefix (str): The prefix to add to the beginning of output filenames.
             delimiter (str): The single character delimiter to use in the output files.
