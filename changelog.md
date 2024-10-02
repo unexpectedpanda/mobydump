@@ -6,7 +6,7 @@
   make it even smaller, at the cost of compute time. Caches written by v0.8 and higher
   aren't compatible with earlier versions of MobyDump.
 
-- You can now upload output files to DropBox instead of keeping them locally.
+- You can now upload output files to Dropbox instead of keeping them locally.
 
 - The cache file location can now be specified by the user.
 
@@ -17,7 +17,7 @@
   when a game is updated.
 
 - You can now output to both JSON and delimiter-separated value files instead of just one
-  when processing finishess.
+  when processing finishes.
 
 - A time estimate is now given for completion of stage two.
 
