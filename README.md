@@ -90,22 +90,29 @@ You receive a response that looks similar to the following example:
 ```
 NAME                                          ID
 
-1292 Advanced Programmable Video System      253
-3DO                                           35
-ABC 80                                       318
-APF MP1000/Imagination Machine               213
-Acorn 32-bit                                 117
-Adventure Vision                             210
-AirConsole                                   305
-Alice 32/90                                  194
-Altair 680                                   265
-Altair 8800                                  222
-Amazon Alexa                                 237
-Amiga                                         19
-Amiga CD32                                    56
-Amstrad CPC                                   60
-Amstrad PCW                                  136
-Android                                       91
+1292 Advanced Programmable Video System             253
+3DO                                                  35
+ABC 80                                              318
+APF MP1000/Imagination Machine                      213
+Acorn - Electron                                     93
+Acorn 32-bit                                        117
+Adventure Vision                                    210
+AirConsole                                          305
+Alice 32/90                                         194
+Altair 680                                          265
+Altair 8800                                         222
+Amazon Alexa                                        237
+Amstrad - CPC                                        60
+Amstrad PCW                                         136
+Antstream                                           286
+Apple - II                                           31
+Apple - IIgs                                         51
+Apple - Macintosh                                    74
+Apple - iPad                                         96
+Apple - iPhone                                       86
+Apple - iPod Classic                                 80
+Apple I                                             245
+Arcade                                              143
 ...
 ```
 
@@ -139,14 +146,20 @@ options:
                         MobyGames only provides update data for the last 21 days. If
                         you've waited longer, you should redownload the platform from
                         scratch.
+```
+
+Flags that can be used with `--platforms`, `--games`, or `--update`:
+
+```
+  -c "<CACHE_PATH>", --cache "<CACHE_PATH>"
+                        Change the cache path is. Defaults to cache in the same folder
+                        MobyDump is in.
 
   -ua "<USER_AGENT>", --useragent "<USER_AGENT>"
-                        Must be used with --games, --platforms, or --update.
-
                         Change the user agent MobyDump supplies when making requests.
                         Defaults to:
 
-                        MobyDump/0.3; https://github.com/unexpectedpanda/mobydump
+                        MobyDump/0.8; https://github.com/unexpectedpanda/mobydump
 ```
 
 Flags that can be used with `--games` or `--update`:
@@ -157,8 +170,14 @@ Flags that can be used with `--games` or `--update`:
                         single-byte characters only. When not specified, defaults to tab.
                         Ignored if output is set to JSON.
 
+  -db, --dropbox        ZIP the output files, upload them to Dropbox, and then delete the
+                        local files.
+
   -fr, --forcerestart   Don't resume from where MobyDump last left off. Instead, restart
                         the request process from MobyGames. This deletes your cached files.
+
+  -n, --noninteractive  Make MobyDump output less chatty for non-interactive terminals, so
+                        logs don't get out of control.
 
   -o <FILE_TYPE_ID>, --output <FILE_TYPE_ID>
                         The file type to output to. When not specified, defaults to 1.
@@ -167,11 +186,12 @@ Flags that can be used with `--games` or `--update`:
                         0 - Don't output files
                         1 - Delimiter separated value
                         2 - JSON
+                        3 - Delimiter separated value and JSON
 
                         Delimiter separated value files are sanitized for problem
                         characters, JSON data is left raw.
 
-  -pa <FOLDER_PATH>, --path <FOLDER_PATH>
+  -pa "<FOLDER_PATH>", --path "<FOLDER_PATH>"
                         The folder to output files to. When not specified, defaults to
                         MobyDump's directory.
 
@@ -201,6 +221,36 @@ Flags that can be used with `--games` or `--update`:
                         with MobyGames, lower numbers than are suitable for your API key
                         could get your client or API key banned.
 ```
+
+## Set up Dropbox for export
+
+After MobyDump has saved output files to disk, you have the option to upload them to
+Dropbox with `--dropbox`. The files are removed from the disk after upload.
+
+To set up Dropbox uploading:
+
+1.  Go to https://www.dropbox.com/developers/apps, create a new app, and get your Dropbox
+    app key and secret.
+
+1.  Assign them to `DROPBOX_APP_KEY` and `DROPBOX_APP_SECRET` in the same `.env` file you
+    stored `MOBY_API` in.
+
+1.  Visit the following URL, replacing `<DROPBOX_APP_KEY>` with your app key:
+
+    ```
+    https://www.dropbox.com/oauth2/authorize?client_id=<DROPBOX_APP_KEY>&response_type=code&token_access_type=offline
+    ```
+
+1.  Assign the access code you're given to `DROPBOX_ACCESS_CODE` in the `.env` file.
+
+1.  Run the `tools/get_dropbox_refresh_token.py` script to get your refresh token, which
+    you need to be able to request short-lived tokens on an ongoing basis.
+
+    You can only use an access code once. If you mess up, you'll need to get another one
+    and run the script again.
+
+1.  From the response to the script, assign the `refresh_key` value to
+    `DROPBOX_REFRESH_TOKEN` in the `.env` file.
 
 ## Known limitations
 

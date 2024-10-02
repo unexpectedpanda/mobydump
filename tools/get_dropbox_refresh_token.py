@@ -10,16 +10,24 @@ load_dotenv()
 
 # Initial setup:
 #
-# 1. Get your app key and secret from https://www.dropbox.com/developers/apps.
-# 2. Add them to DROPBOX_APP_KEY and DROPBOX_APP_SECRET in the same .env file you stored
-#    MOBY_API in.
-# 3. Visit the following URL, replacing the <DROPBOX_APP_KEY> value:
+# 1.  Go to https://www.dropbox.com/developers/apps, create a new app, and get your
+#     Dropbox app key and secret
+# 2.  Assign them to DROPBOX_APP_KEY and DROPBOX_APP_SECRET in the same .env file you
+#     stored MOBY_API in.
+# 3.  Visit the following URL, replacing the <DROPBOX_APP_KEY> value:
 #
-#    https://www.dropbox.com/oauth2/authorize?client_id=<DROPBOX_APP_KEY>&response_type=code&token_access_type=offline
+#     https://www.dropbox.com/oauth2/authorize?client_id=<DROPBOX_APP_KEY>&response_type=code&token_access_type=offline
 #
-# 4. Add the code you're given to DROPBOX_ACCESS_CODE in the .env file.
-# 5. Run this script. YOU CAN ONLY USE AN ACCESS CODE ONCE. If you mess up, you'll need to get another one.
-# 6. From the response to this script, copy the refresh_key value to DROPBOX_REFRESH_TOKEN in the .env file.
+# 4.  Assign the access code you're given to DROPBOX_ACCESS_CODE in the .env file.
+#
+# 5.  Run this script to get your refresh token, which you need to be able to request
+#     short-lived tokens on an ongoing basis.
+#
+#     You can only use an access code once. If you mess up, you'll need to get another one
+#     and run the script again.
+#
+# 6.  From the response to this script, assign the refresh_key value to
+#     DROPBOX_REFRESH_TOKEN in the .env file.
 
 # Get a refresh token
 if os.getenv('DROPBOX_ACCESS_CODE') and os.getenv('DROPBOX_APP_KEY') and os.getenv('DROPBOX_APP_SECRET'):

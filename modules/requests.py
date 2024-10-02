@@ -1,3 +1,4 @@
+import pathlib
 import sys
 from time import gmtime, sleep, strftime
 
@@ -138,6 +139,29 @@ def api_request(
             sys.exit(1)
 
     return response
+
+
+def download_file(url: str, local_filename: pathlib.Path) -> None:
+    """
+    Downloads a file in chunks.
+
+    Code from: https://stackoverflow.com/questions/16694907/download-large-file-in-python-with-requests
+
+    Args:
+        url (str): The URL to download from.
+        local_filename (pathlib.Path): The local file to save to.
+
+    Returns:
+        str: The filename
+    """
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        with open(local_filename, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                # If you have a chunk encoded response, uncomment the 'if'
+                # and set chunk_size parameter to None.
+                # if chunk:
+                f.write(chunk)
 
 
 def request_retry(
