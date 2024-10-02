@@ -5,8 +5,8 @@ specific platform, and then outputs it to delimiter-separated value files for im
 Microsoft Access, or alternatively a JSON file. It's purpose-built for the
 [Exo projects](https://github.com/exoscoriae).
 
-Downloads are auto-resumed if the process is interrupted by the user, or if select HTTP
-error codes are received.
+Downloads are auto-resumed if the process is interrupted by the user and restarted, or if
+select HTTP error codes are received.
 
 ## Before you begin
 
