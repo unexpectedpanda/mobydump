@@ -48,6 +48,36 @@ do so, complete the following steps:
     Use lower numbers at your own risk. Unless you have an agreement with MobyGames, lower
     numbers than are suitable for your API key could get your client or API key banned.
 
+### Set up Dropbox for export
+
+After MobyDump has saved output files to disk, you have the option to upload them to
+Dropbox with `--dropbox`. The files are removed from the disk after upload.
+
+To set up Dropbox uploading:
+
+1.  Go to https://www.dropbox.com/developers/apps, create a new app, and get your Dropbox
+    app key and secret.
+
+1.  Assign them to `DROPBOX_APP_KEY` and `DROPBOX_APP_SECRET` in the same `.env` file you
+    stored `MOBY_API` in.
+
+1.  Visit the following URL, replacing `<DROPBOX_APP_KEY>` with your app key:
+
+    ```
+    https://www.dropbox.com/oauth2/authorize?client_id=<DROPBOX_APP_KEY>&response_type=code&token_access_type=offline
+    ```
+
+1.  Assign the access code you're given to `DROPBOX_ACCESS_CODE` in the `.env` file.
+
+1.  Run the `tools/get_dropbox_refresh_token.py` script to get your refresh token, which
+    you need to be able to request short-lived tokens on an ongoing basis.
+
+    You can only use an access code once. If you mess up, you'll need to get another one
+    and run the script again.
+
+1.  From the response to the script, assign the `refresh_key` value to
+    `DROPBOX_REFRESH_TOKEN` in the `.env` file.
+
 ## Using MobyDump
 
 How you run MobyDump changes depending on your platform. Open a terminal, change to the
@@ -221,36 +251,6 @@ Flags that can be used with `--games` or `--update`:
                         with MobyGames, lower numbers than are suitable for your API key
                         could get your client or API key banned.
 ```
-
-## Set up Dropbox for export
-
-After MobyDump has saved output files to disk, you have the option to upload them to
-Dropbox with `--dropbox`. The files are removed from the disk after upload.
-
-To set up Dropbox uploading:
-
-1.  Go to https://www.dropbox.com/developers/apps, create a new app, and get your Dropbox
-    app key and secret.
-
-1.  Assign them to `DROPBOX_APP_KEY` and `DROPBOX_APP_SECRET` in the same `.env` file you
-    stored `MOBY_API` in.
-
-1.  Visit the following URL, replacing `<DROPBOX_APP_KEY>` with your app key:
-
-    ```
-    https://www.dropbox.com/oauth2/authorize?client_id=<DROPBOX_APP_KEY>&response_type=code&token_access_type=offline
-    ```
-
-1.  Assign the access code you're given to `DROPBOX_ACCESS_CODE` in the `.env` file.
-
-1.  Run the `tools/get_dropbox_refresh_token.py` script to get your refresh token, which
-    you need to be able to request short-lived tokens on an ongoing basis.
-
-    You can only use an access code once. If you mess up, you'll need to get another one
-    and run the script again.
-
-1.  From the response to the script, assign the `refresh_key` value to
-    `DROPBOX_REFRESH_TOKEN` in the `.env` file.
 
 ## Known limitations
 
