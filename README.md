@@ -182,7 +182,7 @@ Flags that can be used with `--platforms`, `--games`, or `--update`:
 
 ```
   -c "<CACHE_PATH>", --cache "<CACHE_PATH>"
-                        Change the cache path is. Defaults to cache in the same folder
+                        Change the cache path. Defaults to cache in the same folder
                         MobyDump is in.
 
   -ua "<USER_AGENT>", --useragent "<USER_AGENT>"

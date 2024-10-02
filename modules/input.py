@@ -168,7 +168,7 @@ def user_input() -> argparse.Namespace:
         '--cache',
         metavar='"<CACHE_PATH>"',
         type=str,
-        help=f'R|Change the cache path is. Defaults to {Font.b}cache{Font.be} in the same folder'
+        help=f'R|Change the cache path. Defaults to {Font.b}cache{Font.be} in the same folder'
         '\nMobyDump is in.'
         '\n\n',
     )
