@@ -124,7 +124,7 @@ def user_input() -> argparse.Namespace:
         metavar='"<FOLDER_PATH>"',
         type=str,
         help='R|The folder to output files to. When not specified, defaults to'
-        '\nMobyDump\'s directory.'
+        '\nMobyDump\'s folder.'
         '\n\n',
     )
 

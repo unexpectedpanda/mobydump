@@ -223,7 +223,7 @@ Flags that can be used with `--games` or `--update`:
 
   -pa "<FOLDER_PATH>", --path "<FOLDER_PATH>"
                         The folder to output files to. When not specified, defaults to
-                        MobyDump's directory.
+                        MobyDump's folder.
 
   -pr "<PREFIX>", --prefix "<PREFIX>"
                         The prefix to add to the beginning of output filenames. When not
