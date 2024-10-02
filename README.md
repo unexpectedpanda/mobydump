@@ -48,7 +48,7 @@ do so, complete the following steps:
     Use lower numbers at your own risk. Unless you have an agreement with MobyGames, lower
     numbers than are suitable for your API key could get your client or API key banned.
 
-### Set up Dropbox for export
+### Set up Dropbox for export (optional)
 
 After MobyDump has saved output files to disk, you have the option to upload them to
 Dropbox with `--dropbox`. The files are removed from the disk after upload.
