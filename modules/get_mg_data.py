@@ -316,7 +316,7 @@ def get_game_details(
             ):
                 if not config.time_estimate_given:
                     eta: datetime.timedelta = datetime.timedelta(
-                        seconds=(game_count - game_iterator) * (config.rate_limit + 1)
+                        seconds=int((game_count - game_iterator) * (config.rate_limit + 1.5))
                     )
 
                     eta_list: list[str] = []
@@ -356,7 +356,7 @@ def get_game_details(
                     else:
                         eta_string = ''.join(eta_list)
 
-                    eprint(f'{Font.heading}• Estimated completion time: {eta_string}{Font.end}')
+                    eprint(f'{Font.heading}• Estimated completion time: {eta_string} (doesn\'t account for retries or response delays){Font.end}', wrap=False)
 
                     config.time_estimate_given = True
 
@@ -455,10 +455,11 @@ def get_platforms(config: Config) -> dict[str, list[dict[str, str | int]]]:
 
     # Get the latest platforms.json file to map low detail MobyGames platform names
     # to names that include manufacturers
-    download_file(
-        'https://raw.githubusercontent.com/unexpectedpanda/mobydump/refs/heads/main/platforms.json',
-        pathlib.Path('platforms.json'),
-    )
+    if not pathlib.Path('.dev').is_file():
+        download_file(
+            'https://raw.githubusercontent.com/unexpectedpanda/mobydump/refs/heads/main/platforms.json',
+            pathlib.Path('platforms.json'),
+        )
 
     for platform in platforms['platforms']:
         platform['platform_name'] = better_platform_name(platform['platform_name'])

@@ -19,7 +19,7 @@ set up your development environment. To do so, complete the following steps:
 1.  Install the required dependencies.
 
     ```
-    pip install natsort numpy pandas python-dateutil requests
+    pip install compress-json-python dropbox natsort numpy pandas python-dateutil python-dotenv requests
     ```
 
 ### Set up your API key and rate limit
