@@ -318,7 +318,8 @@ Flags that can be used with `--games` or `--update`:
 Assuming you exported to delimiter-separated value files, here are the settings you need
 to import them into Microsoft Access:
 
-1.  Choose **Delimited** as the format, and then choose the delimiter.
+1.  Choose **Delimited** as the format, and then choose the delimiter (the default is
+    tab).
 
 1.  Change **Text Qualifier** to `"`.
 
