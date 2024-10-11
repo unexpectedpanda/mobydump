@@ -8,7 +8,7 @@ from modules.utils import Config, eprint
 
 
 def api_request(
-    url: str, config: Config, message: str = '', timeout: int = 0
+    url: str, config: Config, message: str = '', timeout: int = 0, type: str = ''
 ) -> requests.models.Response:
     """
     Requests data from the MobyGames API.
@@ -22,6 +22,9 @@ def api_request(
 
         timeout (int): How long to wait to make the request, in seconds. Only used
             if the request needs to be retried.
+
+        type (str): What type of API request is being made. Valid options are
+            '' or 'game-details'.
 
     Returns:
         requests.models.Response: The response from the MobyGames API.
@@ -51,6 +54,12 @@ def api_request(
             )
             eprint(f'\n{err}')
             sys.exit(1)
+        elif err.response.status_code == 404 and type == 'game-details':
+            eprint(
+                '• URL not found (404). The game has likely been assigned to another ID, and the platform needs updating. Skipping...',
+                level='warning',
+                wrap=False,
+            )
         elif err.response.status_code == 422:
             eprint(
                 'Unprocessable content (422). The parameter sent was the right type, but was invalid.',

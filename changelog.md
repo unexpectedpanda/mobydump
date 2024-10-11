@@ -1,5 +1,31 @@
 # Changelog
 
+# v0.9.0 (10 October 2024)
+
+- Fixed MobyDump crashing if a MobyGames platform has no games.
+
+- Instead of exiting when MobyDump hits a 404 on downloading game details, it now
+  progresses to the next game in the list. You might get a 404, for example, when
+  someone accidentally creates a new game ID for a game that already exists in MobyGames'
+  database, and it gets removed before MobyDump has a chance to download its details.
+
+- The description field in delimiter-separated value files is now converted from HTML to
+  a restricted subset of Markdown. This makes it easier to search and work with in fields
+  that only support plain text.
+
+- During updates, platforms with no updates no longer have their cache files rewritten.
+
+- Fixed an estimated completion time bug.
+
+- Fixed MobyDump being too eager to make a new request if a platform had less than 100
+  titles, which caused a 429 error.
+
+- Fixed duplicates possibly being written out to delimiter-separated value and JSON files.
+  This can happen due to timing issues when initially requesting games from MobyGames
+  during stage 1, resulting in duplicates entering the cache. While it's preferable to
+  stop duplicates entering the cache in the first place, it's easier to filter them out
+  during the export stage, so that is what has been done.
+
 # v0.8 (29 September 2024)
 
 - Breaking change: the `compress-json-python` library is now used to minify the cache and
@@ -21,7 +47,7 @@
 
 - A time estimate is now given for completion of stage two.
 
-- MobyGames' stripped down platform names now have manufacturers added.
+- MobyGames' very basic platform names now have manufacturers added.
 
 - Fixed JSON output.
 
@@ -32,7 +58,7 @@
 
 # v0.6 (22 September 2024)
 
-- Fixed a crash when a platform name used invalid characters for a filepath.
+- Fixed a crash when a platform name uses invalid characters for a filepath.
 
 - Slight rework of HTTP error handling.
 

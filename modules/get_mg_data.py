@@ -5,7 +5,7 @@ import json
 import pathlib
 import sys
 import zipfile
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import dateutil
 import dropbox
@@ -23,6 +23,9 @@ from modules.data_sanitize import (
 )
 from modules.requests import api_request, download_file, request_wait
 from modules.utils import Config, Font, eprint, get_dropbox_short_lived_token
+
+if TYPE_CHECKING:
+    import requests
 
 
 def add_games(games_dict: dict[str, Any], games: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -116,12 +119,12 @@ def get_games(
     """
     now: datetime.datetime
 
-    platform_str_length: int = len(f'Retrieving games from {platform_name}')
+    platform_str_length: int = len(f'Retrieving games from {platform_name} [ID: {platform_id}]')
     horizontal_line_length: int = int((80 - platform_str_length - 10) / 2)
     horizontal_line: str = '─' * horizontal_line_length
 
     eprint(
-        f'{Font.b}{horizontal_line} Retrieving games from {platform_name} {horizontal_line}{Font.be}\n'
+        f'{Font.b}{horizontal_line} Retrieving games from {platform_name} [ID: {platform_id}] {horizontal_line}{Font.be}\n'
     )
     eprint(f'{Font.b}{Font.u}Stage 1{Font.end}')
     eprint(
@@ -153,16 +156,9 @@ def get_games(
         eprint(f'• Requests were previously interrupted, resuming from offset {offset}')
 
     # Get all the response pages for a platform, and add the games to a list
-    i: int = 0
     end_loop: bool = False
 
     while True:
-        # Wait for the rate limit after the first request
-        if i > 0:
-            request_wait(config)
-        else:
-            i += 1
-
         if not completion_status['stage_1_finished']:
             # Make the request for the platform's games
             now = (
@@ -205,6 +201,12 @@ def get_games(
                     completion_status['stage_1_finished'] = True
                     end_loop = True
 
+                # Handle when the platform has no games
+                if len(game_dict['games']) == 0 and offset - offset_increment == 0:
+                    eprint(f'Looks like {platform_name} has no games, exiting...', level='warning')
+                    sys.exit()
+
+                request_wait(config)
             else:
                 completion_status['stage_1_finished'] = True
                 end_loop = True
@@ -248,13 +250,13 @@ def get_game_details(
     """
     now: datetime.datetime
 
-    platform_str_length: int = len(f'Retrieving games from {platform_name}')
+    platform_str_length: int = len(f'Retrieving games from {platform_name} [ID: {platform_id}]')
     horizontal_line_length: int = int((80 - platform_str_length - 10) / 2)
     horizontal_line: str = '─' * horizontal_line_length
 
     if list(pathlib.Path(config.cache).joinpath(f'{platform_id}/games-details/').glob('*.json')):
         eprint(
-            f'{Font.b}{horizontal_line} Retrieving games from {platform_name} {horizontal_line}{Font.be}'
+            f'{Font.b}{horizontal_line} Retrieving games from {platform_name} [ID: {platform_id}] {horizontal_line}{Font.be}\n'
         )
 
     eprint(
@@ -316,8 +318,13 @@ def get_game_details(
             ):
                 if not config.time_estimate_given:
                     eta: datetime.timedelta = datetime.timedelta(
-                        seconds=int((game_count - game_iterator) * (config.rate_limit + 1.5))
+                        seconds=int((game_count - game_iterator) * (config.rate_limit + 1.25))
                     )
+
+                    if not eta:
+                        eta: datetime.timedelta = datetime.timedelta(
+                            seconds=int((1) * (config.rate_limit + 1.25))
+                        )
 
                     eta_list: list[str] = []
                     eta_string: str = ''
@@ -356,7 +363,10 @@ def get_game_details(
                     else:
                         eta_string = ''.join(eta_list)
 
-                    eprint(f'{Font.heading}• Estimated completion time: {eta_string} (doesn\'t account for retries or response delays){Font.end}', wrap=False)
+                    eprint(
+                        f'{Font.heading}• Estimated completion time: {eta_string} (doesn\'t account for retries or response delays){Font.end}',
+                        wrap=False,
+                    )
 
                     config.time_estimate_given = True
 
@@ -366,11 +376,18 @@ def get_game_details(
                     .astimezone(tz=None)
                 )
 
-                game_details: dict[str, Any] = api_request(
+                game_response: requests.models.Response = api_request(
                     f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform_id}?api_key={config.api_key}',
                     config,
                     message=f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})...',
-                ).json()
+                    type='game-details',
+                )
+
+                if game_response.status_code == 404:
+                    request_wait(config)
+                    continue
+
+                game_details: dict[str, Any] = game_response.json()
 
                 with open(
                     pathlib.Path(config.cache).joinpath(
@@ -453,12 +470,12 @@ def get_platforms(config: Config) -> dict[str, list[dict[str, str | int]]]:
         message='• Retrieving platforms...',
     ).json()
 
-    # Get the latest platforms.json file to map low detail MobyGames platform names
+    # Get the latest platform-names.json file to map low detail MobyGames platform names
     # to names that include manufacturers
     if not pathlib.Path('.dev').is_file():
         download_file(
-            'https://raw.githubusercontent.com/unexpectedpanda/mobydump/refs/heads/main/platforms.json',
-            pathlib.Path('platforms.json'),
+            'https://raw.githubusercontent.com/unexpectedpanda/mobydump/refs/heads/main/platform-names.json',
+            pathlib.Path('platform-names.json'),
         )
 
     for platform in platforms['platforms']:
@@ -699,7 +716,7 @@ def get_updates(config: Config) -> None:
 
                 if not rd.months and rd.days < 21:
                     eprint(
-                        f'{Font.b}Updating the {platform["platform_name"]} platform{Font.be} ({platform["platform_id"]})'
+                        f'{Font.b}Updating the {platform["platform_name"]} platform{Font.be} [ID: {platform["platform_id"]}]'
                     )
 
                     # Read from the update cache
@@ -764,6 +781,15 @@ def get_updates(config: Config) -> None:
                             if removed_game_id in game_ids:
                                 game_ids.remove(removed_game_id)
                                 removed_game_ids.add(removed_game_id)
+
+                        # Skip this platform if none of its titles have been updated
+                        if not updated_platform_related_games and not removed_game_ids:
+                            eprint(
+                                f'\nNo updates found for the {platform["platform_name"]} platform, skipping...\n',
+                                level='warning',
+                                wrap=False,
+                            )
+                            continue
 
                         # Recreate the cached files in the games folder
                         added_game_ids: set[int] = set()
@@ -907,11 +933,18 @@ def get_updates(config: Config) -> None:
                                     .astimezone(tz=None)
                                 )
 
-                                game_details: dict[str, Any] = api_request(
+                                game_response: requests.models.Response = api_request(
                                     f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform["platform_id"]}?api_key={config.api_key}',
                                     config,
                                     message=f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})...',
-                                ).json()
+                                    type='game-details',
+                                )
+
+                                if game_response.status_code == 404:
+                                    request_wait(config)
+                                    continue
+
+                                game_details: dict[str, Any] = game_response.json()
 
                                 with open(
                                     pathlib.Path(config.cache).joinpath(
@@ -1013,6 +1046,9 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
 
         json_file_contents: list[str] = ['{\n  "games": [\n']
 
+        # Guard against duplicates, which can possibly be in cache files due to timing issues between requests
+        game_id_check: set[int] = set()
+
         for game_file in (
             pathlib.Path(config.cache).joinpath(f'{platform_id}/games/').glob('*.json')
         ):
@@ -1026,42 +1062,47 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
 
                 # Add the game contents to the file
                 for game in cache['games']:
-                    if (
-                        pathlib.Path(config.cache)
-                        .joinpath(f'{platform_id}/games-details/{game['game_id']}.json')
-                        .is_file()
-                    ):
-                        with open(
-                            pathlib.Path(config.cache).joinpath(
-                                f'{platform_id}/games-details/{game['game_id']}.json'
-                            ),
-                            encoding='utf-8',
-                        ) as game_details_cache:
-                            loaded_game_details: dict[str, Any] = json.load(game_details_cache)
+                    if game['game_id'] not in game_id_check:
+                        game_id_check.add(game['game_id'])
 
-                            try:
-                                loaded_game_details = decompress(loaded_game_details)
-                            except Exception:
-                                pass
+                        if (
+                            pathlib.Path(config.cache)
+                            .joinpath(f'{platform_id}/games-details/{game['game_id']}.json')
+                            .is_file()
+                        ):
+                            with open(
+                                pathlib.Path(config.cache).joinpath(
+                                    f'{platform_id}/games-details/{game['game_id']}.json'
+                                ),
+                                encoding='utf-8',
+                            ) as game_details_cache:
+                                loaded_game_details: dict[str, Any] = json.load(game_details_cache)
 
-                            # Add the game details keys to the game
-                            for key, values in loaded_game_details.items():
-                                game[key] = values
+                                try:
+                                    loaded_game_details = decompress(loaded_game_details)
+                                except Exception:
+                                    pass
 
-                            # Sort alphabetically by key
-                            game = dict(sorted(game.items()))
+                                # Add the game details keys to the game
+                                for key, values in loaded_game_details.items():
+                                    game[key] = values
 
-                            # Move game ID and title to the top
-                            game = {'game_id': game.pop('game_id'), **game}
-                            game = {'title': game.pop('title'), **game}
+                                # Sort alphabetically by key
+                                game = dict(sorted(game.items()))
 
-                            with open(pathlib.Path(output_file), 'a', encoding='utf-8-sig') as file:
-                                game_json: str = (
-                                    f'{json.dumps(game, indent=2, ensure_ascii=False)},'
-                                )
+                                # Move game ID and title to the top
+                                game = {'game_id': game.pop('game_id'), **game}
+                                game = {'title': game.pop('title'), **game}
 
-                                for line in game_json.split('\n'):
-                                    json_file_contents.append(f'    {line}\n')
+                                with open(
+                                    pathlib.Path(output_file), 'a', encoding='utf-8-sig'
+                                ) as file:
+                                    game_json: str = (
+                                        f'{json.dumps(game, indent=2, ensure_ascii=False)},'
+                                    )
+
+                                    for line in game_json.split('\n'):
+                                        json_file_contents.append(f'    {line}\n')
 
         # Write the file
         json_file_contents = json_file_contents[:-1]
@@ -1182,46 +1223,58 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
                 .joinpath(f'{platform_id}/games-details/{game_id}.json')
                 .is_file()
             ):
-                with open(
-                    pathlib.Path(config.cache).joinpath(
-                        f'{platform_id}/games-details/{game_id}.json'
-                    ),
-                    encoding='utf-8',
-                ) as games_details_cache:
-                    try:
+                try:
+                    with open(
+                        pathlib.Path(config.cache).joinpath(
+                            f'{platform_id}/games-details/{game_id}.json'
+                        ),
+                        encoding='utf-8',
+                    ) as games_details_cache:
+
                         game_detail = decompress(json.load(games_details_cache))
 
                         games_details.append(game_detail)
-                    except Exception:
-                        game_details: dict[str, Any] = api_request(
-                            f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform_id}?api_key={config.api_key}',
-                            config,
-                            message=f'• [Re-requesting details for game ID: {game_id}, as it seems to be corrupt...',
-                        ).json()
+                except Exception:
+                    # Grab the game data again if it's corrupt
+                    game_response: requests.models.Response = api_request(
+                        f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform_id}?api_key={config.api_key}',
+                        config,
+                        message=f'• [Re-requesting details for game ID: {game_id}, as it seems to be corrupt...',
+                        type='game-details',
+                    )
 
-                        with open(
-                            pathlib.Path(config.cache).joinpath(
-                                f'{platform_id}/games-details/{game_id}.json'
-                            ),
-                            'w',
-                            encoding='utf-8',
-                        ) as game_details_cache:
-                            game_details_cache.write(
-                                json.dumps(
-                                    compress(game_details),
-                                    separators=(',', ':'),
-                                    ensure_ascii=False,
-                                )
+                    # Delete the file if a 404 is received
+                    if game_response.status_code == 404:
+                        pathlib.Path(config.cache).joinpath(
+                            f'{platform_id}/games-details/{game_id}.json'
+                        ).unlink()
+                        continue
+
+                    game_details: dict[str, Any] = game_response.json()
+
+                    with open(
+                        pathlib.Path(config.cache).joinpath(
+                            f'{platform_id}/games-details/{game_id}.json'
+                        ),
+                        'w',
+                        encoding='utf-8',
+                    ) as game_details_cache:
+                        game_details_cache.write(
+                            json.dumps(
+                                compress(game_details),
+                                separators=(',', ':'),
+                                ensure_ascii=False,
                             )
-
-                        request_wait(config)
-
-                        eprint(
-                            f'• [Re-requesting details for game ID: {game_id}, as it seems to be corrupt... done.',
-                            overwrite=True,
                         )
 
-                        games_details.append(game_details)
+                    request_wait(config)
+
+                    eprint(
+                        f'• [Re-requesting details for game ID: {game_id}, as it seems to be corrupt... done.',
+                        overwrite=True,
+                    )
+
+                    games_details.append(game_details)
 
         games_details = sorted(games_details, key=lambda x: x['game_id'])
 
@@ -1286,6 +1339,9 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
         def write_file(dataframe: pd.DataFrame, output_file: str) -> None:
             # Sanitize the dataframe
             dataframe = sanitize_dataframes(dataframe)
+
+            # Remove duplicates, which can possibly be in cache files due to timing issues between requests
+            dataframe = dataframe.drop_duplicates(subset=['game_id'])
 
             # Write to delimited file, using a BOM so Microsoft apps interpret the encoding correctly
             dataframe.to_csv(output_file, index=False, encoding='utf-8-sig', sep=config.delimiter)

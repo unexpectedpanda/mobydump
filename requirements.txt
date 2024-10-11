@@ -1,0 +1,10 @@
+bs4 >= 0.0.2
+compress-json-python >= 3.0.0
+dropbox >= 12.0.2
+html2text >= 2024.2.26
+natsort >= 8.4.0
+numpy >= 2.0.1
+pandas >= 2.2.2
+python-dateutil >= 2.9.0
+python-dotenv >= 1.0.1
+requests >= 2.31.0

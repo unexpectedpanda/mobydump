@@ -16,11 +16,36 @@ set up your development environment. To do so, complete the following steps:
 
 1.  [Install Python 3.10 or higher](https://www.python.org/).
 
-1.  Install the required dependencies.
+1.  Open a terminal to install the required dependencies. You can do this with
+    [Hatch](https://github.com/pypa/hatch) or pip.
 
-    ```
-    pip install compress-json-python dropbox natsort numpy pandas python-dateutil python-dotenv requests
-    ```
+    * **Hatch**. Run the following command to install Hatch:
+
+      ```
+      pip install hatch
+      ```
+
+      Navigate to where the `pyproject.toml` file is for MobyDump, and then enter the
+      default environment:
+
+      ```
+      hatch shell
+      ```
+
+      Hatch installs the dependencies you need on the first run. You can now
+      [run MobyDump](#run-mobydump) while inside this environment. When you're done with
+      MobyDump, exit the environment:
+
+      ```
+      exit
+      ```
+
+    * **Pip**. Run the following command to install the dependencies with `pip`,
+      potentially in combination with an environment manager of your choice:
+
+      ```
+      pip install -r requirements.txt
+      ```
 
 ### Set up your API key and rate limit
 
@@ -43,7 +68,8 @@ do so, complete the following steps:
     MOBY_RATE=10
     ```
 
-    Valid values are `10` for the free API key, or `5` for the MobyPro API key.
+    Valid values are `10` for the legacy free API key (no longer issued by MobyGames), or
+    `5` for the MobyPro API key.
 
     Use lower numbers at your own risk. Unless you have an agreement with MobyGames, lower
     numbers than are suitable for your API key could get your client or API key banned.
@@ -55,11 +81,18 @@ Dropbox with `--dropbox`. The files are removed from the disk after upload.
 
 To set up Dropbox uploading:
 
-1.  Go to https://www.dropbox.com/developers/apps, create a new app, and get your Dropbox
-    app key and secret.
+1.  Go to https://www.dropbox.com/developers/apps.
 
-1.  Assign them to `DROPBOX_APP_KEY` and `DROPBOX_APP_SECRET` in the same `.env` file you
-    stored `MOBY_API` in.
+1.  Create a new app.
+
+1.  Get your Dropbox app key and app secret, and assign them to
+    `DROPBOX_APP_KEY` and `DROPBOX_APP_SECRET` in
+    [the same `.env` file in which you set up your API key](#set-up-your-api-key-and-rate-limit):
+
+    ```
+    DROPBOX_APP_KEY="<YOUR_DROPBOX_APP_KEY>"
+    DROPBOX_APP_SECRET="<YOUR_DROPBOX_APP_SECRET>"
+    ```
 
 1.  Visit the following URL, replacing `<DROPBOX_APP_KEY>` with your app key:
 
@@ -69,16 +102,37 @@ To set up Dropbox uploading:
 
 1.  Assign the access code you're given to `DROPBOX_ACCESS_CODE` in the `.env` file.
 
-1.  Run the `tools/get_dropbox_refresh_token.py` script to get your refresh token, which
-    you need to be able to request short-lived tokens on an ongoing basis.
+    ```
+    DROPBOX_ACCESS_CODE="<YOUR_DROPBOX_ACCESS_CODE>"
+    ```
 
-    You can only use an access code once. If you mess up, you'll need to get another one
-    and run the script again.
+1.  Run the `tools/get_dropbox_refresh_token.py` script. This uses your access code to get
+    a refresh token. The refresh token allows you to request short-lived tokens on an
+    ongoing basis. Short-lived tokens allow you to upload to your Dropbox.
+
+    You can only use an access code once. If you get something wrong, you need to request
+    another access code and run the script again.
 
 1.  From the response to the script, assign the `refresh_key` value to
     `DROPBOX_REFRESH_TOKEN` in the `.env` file.
 
-## Using MobyDump
+    ```
+    DROPBOX_REFRESH_TOKEN="<YOUR_DROPBOX_REFRESH_TOKEN>"
+    ```
+
+Your `.env` file should now look something
+like this, and you're ready to upload to Dropbox with `--dropbox`:
+
+```
+MOBY_API="aCompletelyFakeMobyAPIKey"
+MOBY_RATE=10
+DROPBOX_APP_KEY="aCompletelyFakeDropboxAppKey"
+DROPBOX_APP_SECRET="aCompletelyFakeDropboxAppSecret"
+DROPBOX_ACCESS_CODE="aCompletelyFakeDropboxAccessCode"
+DROPBOX_REFRESH_TOKEN="aCompletelyFakeDropboxRefreshToken"
+```
+
+## Run MobyDump
 
 How you run MobyDump changes depending on your platform. Open a terminal, change to the
 folder MobyDump is in, and then run one of the following commands.
@@ -259,7 +313,7 @@ Flags that can be used with `--games` or `--update`:
   stick to the advertised limits and only run one session of MobyDump, or your client or
   API key could be banned by MobyGames for abuse.
 
-## Importing into Microsoft Access
+## Import into Microsoft Access
 
 Assuming you exported to delimiter-separated value files, here are the settings you need
 to import them into Microsoft Access:
@@ -270,8 +324,9 @@ to import them into Microsoft Access:
 
 1.  Select **First row contains field names**.
 
-1.  The following files contain fields whose field data type must be set manually before
-    completing the import to avoid errors:
+1.  Microsoft Access doesn't detect all fields correctly. The following files contain
+    fields whose field data type must be set manually before completing the import to
+    avoid errors:
 
     <table>
       <thead>
@@ -283,9 +338,13 @@ to import them into Microsoft Access:
       </thead>
       <tbody>
         <tr>
-          <td>Patches</td>
+          <td rowspan="2">Patches</td>
           <td><code>description</code></td>
           <td>Long text</td>
+        </tr>
+        <tr>
+          <td><code>release_date</code></td>
+          <td>Short text</td>
         </tr>
         <tr>
           <td>Product codes</td>
@@ -304,7 +363,11 @@ to import them into Microsoft Access:
       </tbody>
     </table>
 
+### Set up relationships
+
 In the `Platform name - (Primary) Games` table, set `game_id` as the primary key, and then
-use the relationships view to link the fields between the different tables. If you want,
-you can also link `releases_release_year` in the `Platform name - Releases` and
-`Platform name - Product codes` tables.
+use the relationships view to link the fields between the different tables.
+
+The column `releases_release_year` has been added to the Releases and Product codes files,
+so you can build comparisons using the year as an integer. If you want, you can also link
+this column between these tables.

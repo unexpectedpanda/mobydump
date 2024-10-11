@@ -167,6 +167,7 @@ cachebackup/
 testoutput/
 wip/
 *.txt
+!requirements.txt
 *.accdb
 *.laccdb
 .dev
