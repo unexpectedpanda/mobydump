@@ -354,10 +354,10 @@ to import them into Microsoft Access:
         </tr>
         <tr>
           <td rowspan="2">Releases</td>
-          <tr>
-            <td><code>releases_description</code></td>
-            <td>Long text</td>
-          </tr>
+          <td><code>releases_description</code></td>
+          <td>Long text</td>
+        </tr>
+        <tr>
           <td><code>releases_release_date</code></td>
           <td>Short text</td>
         </tr>
