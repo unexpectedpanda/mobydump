@@ -323,7 +323,7 @@ to import them into Microsoft Access:
 
 1.  Change **Text Qualifier** to `"`.
 
-1.  Select **First row contains field names**.
+1.  Enable **First row contains field names**.
 
 1.  Microsoft Access doesn't detect all fields correctly. The following files contain
     fields whose field data type must be set manually before completing the import to
