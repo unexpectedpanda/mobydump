@@ -367,7 +367,8 @@ to import them into Microsoft Access:
 ### Set up relationships
 
 In the `Platform name - (Primary) Games` table, set `game_id` as the primary key, and then
-use the relationships view to link the fields between the different tables.
+use the relationships view to link the fields between the different tables you've created
+by importing the delimiter-separated value files.
 
 The column `releases_release_year` has been added to the Releases and Product codes files,
 so you can build comparisons using the year as an integer. If you want, you can also link
