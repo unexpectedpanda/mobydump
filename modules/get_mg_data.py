@@ -317,51 +317,7 @@ def get_game_details(
                 .is_file()
             ):
                 if not config.time_estimate_given:
-                    eta: datetime.timedelta = datetime.timedelta(
-                        seconds=int((game_count - game_iterator) * (config.rate_limit + 1.25))
-                    )
-
-                    if not eta:
-                        eta: datetime.timedelta = datetime.timedelta(
-                            seconds=int((1) * (config.rate_limit + 1.25))
-                        )
-
-                    eta_list: list[str] = []
-                    eta_string: str = ''
-
-                    if eta.days:
-                        eta_list.append(f'{eta.days!s} days')
-                    if int(str(eta)[-8:-6]) != 0:
-                        eta_hours: str = str(eta)[-8:-6]
-
-                        if eta_hours.startswith('0'):
-                            eta_hours = eta_hours[1:]
-
-                        eta_list.append(f'{eta_hours} hours')
-                    if int(str(eta)[-5:-3]) != 0:
-                        eta_minutes: str = str(eta)[-5:-3]
-
-                        if eta_minutes.startswith('0'):
-                            eta_minutes = eta_minutes[1:]
-
-                        eta_list.append(f'{eta_minutes} minutes')
-                    if int(str(eta)[-2:]) != 0:
-                        eta_seconds: str = str(eta)[-2:]
-
-                        if eta_seconds.startswith('0'):
-                            eta_seconds = eta_seconds[1:]
-
-                        eta_list.append(f'{eta_seconds} seconds')
-
-                    if len(eta_list) > 2:
-                        eta_list[-1] = f'and {eta_list[-1]}'
-
-                        eta_string = ', '.join(eta_list)
-                    elif len(eta_list) == 2:
-                        eta_list[-1] = f' and {eta_list[-1]}'
-                        eta_string = ''.join(eta_list)
-                    else:
-                        eta_string = ''.join(eta_list)
+                    eta_string: str = time_estimate(config, game_count, game_iterator)
 
                     eprint(
                         f'{Font.heading}• Estimated completion time: {eta_string} (doesn\'t account for retries or response delays){Font.end}',
@@ -503,7 +459,6 @@ def get_updates(config: Config) -> None:
 
     Args:
         config (Config): The MobyDump config object instance.
-        number_of_days (int): The number of days of updates to request. The maximum is 21.
     """
     eprint(f'{Font.b}{Font.u}Updates{Font.end}')
     eprint(
@@ -662,6 +617,17 @@ def get_updates(config: Config) -> None:
 
             platforms = sorted(platforms, key=lambda x: x['platform_id'])
 
+        # Limit the platform updates if a range has been specified
+        if config.args.updaterange:
+            new_platforms: list[int] = []
+
+            for platform in platforms:
+                if platform['platform_id'] in range(config.args.updaterange[0], config.args.updaterange[1] + 1):
+                    new_platforms.append(platform)
+
+            if new_platforms:
+                platforms = new_platforms
+
         # Update per platform
         for platform in platforms:
             # Check the last updated dates for each platform
@@ -714,300 +680,362 @@ def get_updates(config: Config) -> None:
 
                 rd = dateutil.relativedelta.relativedelta(now, last_updated)
 
-                if not rd.months and rd.days < 21:
+                if rd.months and rd.days > 21:
                     eprint(
-                        f'{Font.b}Updating the {platform["platform_name"]} platform{Font.be} [ID: {platform["platform_id"]}]'
+                        f'• It\'s been more than 21 days since the {platform["platform_name"]} platform was updated. It\'s possible that MobyGames hasn\'t updated the platform in this time, but if you\'re running the'
+                        'update command manually and haven\'t done so in a long time, you might want to redownload the platform from scratch instead to capture new game details.',
+                        level='warning',
                     )
 
-                    # Read from the update cache
-                    updated_games: list[dict[str, Any]] = []
+                eprint(
+                    f'{Font.b}Updating the {platform["platform_name"]} platform{Font.be} [ID: {platform["platform_id"]}]'
+                )
 
-                    for game_file in pathlib.Path(config.cache).joinpath('updates/').glob('*.json'):
-                        with open(pathlib.Path(game_file), encoding='utf-8') as update_cache:
-                            cache = json.loads(update_cache.read())
+                # Read from the update cache
+                updated_games: list[dict[str, Any]] = []
+
+                for game_file in pathlib.Path(config.cache).joinpath('updates/').glob('*.json'):
+                    with open(pathlib.Path(game_file), encoding='utf-8') as update_cache:
+                        cache = json.loads(update_cache.read())
+
+                        try:
+                            cache = decompress(cache)
+                        except Exception:
+                            pass
+
+                        updated_games.extend(cache['games'])
+
+                # Split by platform
+                updated_platform_related_games: list[dict[str, Any]] = []
+                updated_platform_unrelated_games: list[dict[str, Any]] = []
+
+                for updated_game in updated_games:
+                    found_platform: bool = False
+
+                    for platform_release in updated_game['platforms']:
+                        if platform_release['platform_id'] == platform["platform_id"]:
+                            updated_platform_related_games.append(updated_game)
+                            found_platform = True
+
+                    if not found_platform:
+                        updated_platform_unrelated_games.append(updated_game)
+
+                if updated_platform_related_games or updated_platform_unrelated_games:
+                    # Get all the game IDs for the platform
+                    game_ids: set[int] = set()
+
+                    for game_file in (
+                        pathlib.Path(config.cache)
+                        .joinpath(f'{platform["platform_id"]}/games/')
+                        .glob('*.json')
+                    ):
+                        with open(
+                            pathlib.Path(game_file), encoding='utf-8'
+                        ) as platform_request_cache:
+                            cache = json.loads(platform_request_cache.read())
 
                             try:
                                 cache = decompress(cache)
                             except Exception:
                                 pass
 
-                            updated_games.extend(cache['games'])
+                            game_ids = game_ids | {x['game_id'] for x in cache['games']}
 
-                    # Split by platform
-                    updated_platform_related_games: list[dict[str, Any]] = []
-                    updated_platform_unrelated_games: list[dict[str, Any]] = []
+                    # Add in game IDs if they don't exist
+                    game_ids = game_ids | {x['game_id'] for x in updated_platform_related_games}
 
-                    for updated_game in updated_games:
-                        found_platform: bool = False
+                    # Remove game IDs if they should be deleted
+                    removed_game_ids: set[int] = set()
 
-                        for platform_release in updated_game['platforms']:
-                            if platform_release['platform_id'] == platform["platform_id"]:
-                                updated_platform_related_games.append(updated_game)
-                                found_platform = True
+                    for removed_game_id in {
+                        x['game_id'] for x in updated_platform_unrelated_games
+                    }:
+                        if removed_game_id in game_ids:
+                            game_ids.remove(removed_game_id)
+                            removed_game_ids.add(removed_game_id)
 
-                        if not found_platform:
-                            updated_platform_unrelated_games.append(updated_game)
+                    # Skip this platform if none of its titles have been updated
+                    if not updated_platform_related_games and not removed_game_ids:
+                        eprint(
+                            f'\nNo updates found for the {platform["platform_name"]} platform, skipping...\n',
+                            level='warning',
+                            wrap=False,
+                        )
+                        continue
 
-                    if updated_platform_related_games or updated_platform_unrelated_games:
-                        # Get all the game IDs for the platform
-                        game_ids: set[int] = set()
+                    # Recreate the cached files in the games folder
+                    added_game_ids: set[int] = set()
+                    file_contents: list[str, Any] = []
+                    file_count: int = 0
+                    last_id: int = 0
+                    cache = {}
 
-                        for game_file in (
-                            pathlib.Path(config.cache)
-                            .joinpath(f'{platform["platform_id"]}/games/')
-                            .glob('*.json')
-                        ):
-                            with open(
-                                pathlib.Path(game_file), encoding='utf-8'
-                            ) as platform_request_cache:
-                                cache = json.loads(platform_request_cache.read())
+                    eprint('• Updating cache files...')
 
-                                try:
-                                    cache = decompress(cache)
-                                except Exception:
-                                    pass
+                    for game_id in sorted(game_ids):
+                        # Check the updated list for the game ID first
+                        for updated_platform_related_game in updated_platform_related_games:
+                            if updated_platform_related_game['game_id'] == game_id:
+                                file_contents.append(updated_platform_related_game)
+                                added_game_ids.add(game_id)
+                                break
 
-                                game_ids = game_ids | {x['game_id'] for x in cache['games']}
+                        # Check the cache files for the game ID
+                        if game_id not in added_game_ids:
+                            try:
+                                if game_id > last_id:
+                                    with open(
+                                        pathlib.Path(config.cache).joinpath(
+                                            f'{platform["platform_id"]}/games/{100*file_count}.json'
+                                        ),
+                                        encoding='utf-8',
+                                    ) as platform_request_cache:
+                                        cache = json.loads(platform_request_cache.read())
 
-                        # Add in game IDs if they don't exist
-                        game_ids = game_ids | {x['game_id'] for x in updated_platform_related_games}
+                                        try:
+                                            cache = decompress(cache)
+                                        except Exception:
+                                            pass
 
-                        # Remove game IDs if they should be deleted
-                        removed_game_ids: set[int] = set()
+                                # Get the last ID in the cache file, and if we've exceeded it, don't check this file again
+                                last_id: int = max([x['game_id'] for x in cache['games']])
 
-                        for removed_game_id in {
-                            x['game_id'] for x in updated_platform_unrelated_games
-                        }:
-                            if removed_game_id in game_ids:
-                                game_ids.remove(removed_game_id)
-                                removed_game_ids.add(removed_game_id)
-
-                        # Skip this platform if none of its titles have been updated
-                        if not updated_platform_related_games and not removed_game_ids:
-                            eprint(
-                                f'\nNo updates found for the {platform["platform_name"]} platform, skipping...\n',
-                                level='warning',
-                                wrap=False,
-                            )
-                            continue
-
-                        # Recreate the cached files in the games folder
-                        added_game_ids: set[int] = set()
-                        file_contents: list[str, Any] = []
-                        file_count: int = 0
-                        last_id: int = 0
-                        cache = {}
-
-                        eprint('• Updating cache files...')
-
-                        for game_id in sorted(game_ids):
-                            # Check the updated list for the game ID first
-                            for updated_platform_related_game in updated_platform_related_games:
-                                if updated_platform_related_game['game_id'] == game_id:
-                                    file_contents.append(updated_platform_related_game)
-                                    added_game_ids.add(game_id)
-                                    break
-
-                            # Check the cache files for the game ID
-                            if game_id not in added_game_ids:
-                                try:
-                                    if game_id > last_id:
-                                        with open(
-                                            pathlib.Path(config.cache).joinpath(
-                                                f'{platform["platform_id"]}/games/{100*file_count}.json'
-                                            ),
-                                            encoding='utf-8',
-                                        ) as platform_request_cache:
-                                            cache = json.loads(platform_request_cache.read())
-
-                                            try:
-                                                cache = decompress(cache)
-                                            except Exception:
-                                                pass
-
-                                    # Get the last ID in the cache file, and if we've exceeded it, don't check this file again
-                                    last_id: int = max([x['game_id'] for x in cache['games']])
-
-                                    # Grab the game ID entry from the cache file
-                                    file_contents.extend(
-                                        [x for x in cache['games'] if x['game_id'] == game_id]
-                                    )
-                                    added_game_ids.add(game_id)
-                                except Exception:
-                                    pass
-
-                            # Check if modulo 100 == 0 or if it's the last game ID, and if so, write a temporary output file
-                            if not len(file_contents) % 100 or game_id == sorted(game_ids)[-1]:
-                                json_contents: list[str] = json.dumps(
-                                    file_contents, indent=2, ensure_ascii=False
-                                ).split('\n')
-
-                                with open(
-                                    pathlib.Path(config.cache).joinpath(
-                                        f'{platform["platform_id"]}/games/{100*file_count}.jsontmp'
-                                    ),
-                                    'w',
-                                    encoding='utf-8',
-                                ) as platform_request_cache:
-                                    cache_file_write: list[str] = []
-                                    cache_file_write.append('{\n  "games": ')
-                                    for i, line in enumerate(json_contents):
-                                        if i == 0:
-                                            cache_file_write.append(f'{line}\n')
-                                        elif i == len(json_contents) - 1:
-                                            cache_file_write.append(f'  {line}')
-                                        else:
-                                            cache_file_write.append(f'  {line}\n')
-                                    cache_file_write.append('  \n}')
-
-                                    platform_request_cache.write(
-                                        json.dumps(
-                                            compress(json.loads(''.join(cache_file_write))),
-                                            separators=(',', ':'),
-                                            ensure_ascii=False,
-                                        )
-                                    )
-
-                                file_contents = []
-                                file_count += 1
-
-                        # Rename temporary files to overwrite the existing cache files
-                        for game_file in natsorted(
-                            pathlib.Path(config.cache)
-                            .joinpath(f'{platform["platform_id"]}/games/')
-                            .glob('*.jsontmp')
-                        ):
-                            game_file.replace(
-                                pathlib.Path(
-                                    f'{pathlib.Path(game_file.parent).joinpath(game_file.stem)}.json'
+                                # Grab the game ID entry from the cache file
+                                file_contents.extend(
+                                    [x for x in cache['games'] if x['game_id'] == game_id]
                                 )
-                            )
+                                added_game_ids.add(game_id)
+                            except Exception:
+                                pass
 
-                        # Update cache file
-                        now = (
-                            datetime.datetime.now(tz=datetime.timezone.utc)
-                            .replace(tzinfo=datetime.timezone.utc)
-                            .astimezone(tz=None)
+                        # Check if modulo 100 == 0 or if it's the last game ID, and if so, write a temporary output file
+                        if not len(file_contents) % 100 or game_id == sorted(game_ids)[-1]:
+                            json_contents: list[str] = json.dumps(
+                                file_contents, indent=2, ensure_ascii=False
+                            ).split('\n')
+
+                            with open(
+                                pathlib.Path(config.cache).joinpath(
+                                    f'{platform["platform_id"]}/games/{100*file_count}.jsontmp'
+                                ),
+                                'w',
+                                encoding='utf-8',
+                            ) as platform_request_cache:
+                                cache_file_write: list[str] = []
+                                cache_file_write.append('{\n  "games": ')
+                                for i, line in enumerate(json_contents):
+                                    if i == 0:
+                                        cache_file_write.append(f'{line}\n')
+                                    elif i == len(json_contents) - 1:
+                                        cache_file_write.append(f'  {line}')
+                                    else:
+                                        cache_file_write.append(f'  {line}\n')
+                                cache_file_write.append('  \n}')
+
+                                platform_request_cache.write(
+                                    json.dumps(
+                                        compress(json.loads(''.join(cache_file_write))),
+                                        separators=(',', ':'),
+                                        ensure_ascii=False,
+                                    )
+                                )
+
+                            file_contents = []
+                            file_count += 1
+
+                    # Rename temporary files to overwrite the existing cache files
+                    for game_file in natsorted(
+                        pathlib.Path(config.cache)
+                        .joinpath(f'{platform["platform_id"]}/games/')
+                        .glob('*.jsontmp')
+                    ):
+                        game_file.replace(
+                            pathlib.Path(
+                                f'{pathlib.Path(game_file.parent).joinpath(game_file.stem)}.json'
+                            )
                         )
 
-                        completion_status: dict[str, bool] = {
-                            'stage_1_finished': True,
-                            'stage_2_finished': True,
-                            'last_updated': now.strftime("%Y/%m/%d"),
-                        }
+                    # Update cache file
+                    now = (
+                        datetime.datetime.now(tz=datetime.timezone.utc)
+                        .replace(tzinfo=datetime.timezone.utc)
+                        .astimezone(tz=None)
+                    )
 
-                        with open(
-                            pathlib.Path(config.cache).joinpath(
-                                f'{platform["platform_id"]}/status.json'
-                            ),
-                            'w',
-                            encoding='utf-8',
-                        ) as status_cache:
-                            status_cache.write(
-                                json.dumps(completion_status, indent=2, ensure_ascii=False)
-                            )
+                    completion_status: dict[str, bool] = {
+                        'stage_1_finished': True,
+                        'stage_2_finished': True,
+                        'last_updated': now.strftime("%Y/%m/%d"),
+                    }
 
-                        eprint('• Updating cache files... done.', overwrite=True)
+                    with open(
+                        pathlib.Path(config.cache).joinpath(
+                            f'{platform["platform_id"]}/status.json'
+                        ),
+                        'w',
+                        encoding='utf-8',
+                    ) as status_cache:
+                        status_cache.write(
+                            json.dumps(completion_status, indent=2, ensure_ascii=False)
+                        )
 
-                        # Download new and updated game details, and remove game details files for those games that have been removed from the platform
-                        if updated_platform_related_games:
-                            eprint(
-                                f'• {len(updated_platform_related_games)} game IDs changed or were added: {", ".join([str(x["game_id"]) for x in sorted(updated_platform_related_games, key=lambda x: x["game_id"])])}'
-                            )
-                            eprint('• Downloading updated game details.')
+                    eprint('• Updating cache files... done.', overwrite=True)
 
-                            # Get the updated game details
-                            game_iterator = 0
+                    # Download new and updated game details, and remove game details files for those games that have been removed from the platform
+                    if updated_platform_related_games:
+                        eprint(
+                            f'• {len(updated_platform_related_games)} game IDs changed or were added: {", ".join([str(x["game_id"]) for x in sorted(updated_platform_related_games, key=lambda x: x["game_id"])])}'
+                        )
+                        eprint('• Downloading updated game details.')
 
-                            for updated_platform_related_game in sorted(
-                                updated_platform_related_games, key=lambda x: x['game_id']
-                            ):
-                                game_id = updated_platform_related_game['game_id']
-                                game_title = updated_platform_related_game['title']
-                                game_count = len(updated_platform_related_games)
-                                game_iterator += 1
+                        # Get the updated game details
+                        config.time_estimate_given = False
+                        game_iterator = 0
 
-                                now = (
-                                    datetime.datetime.now(tz=datetime.timezone.utc)
-                                    .replace(tzinfo=datetime.timezone.utc)
-                                    .astimezone(tz=None)
-                                )
+                        for updated_platform_related_game in sorted(
+                            updated_platform_related_games, key=lambda x: x['game_id']
+                        ):
+                            game_id = updated_platform_related_game['game_id']
+                            game_title = updated_platform_related_game['title']
+                            game_count = len(updated_platform_related_games)
 
-                                game_response: requests.models.Response = api_request(
-                                    f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform["platform_id"]}?api_key={config.api_key}',
-                                    config,
-                                    message=f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})...',
-                                    type='game-details',
-                                )
-
-                                if game_response.status_code == 404:
-                                    request_wait(config)
-                                    continue
-
-                                game_details: dict[str, Any] = game_response.json()
-
-                                with open(
-                                    pathlib.Path(config.cache).joinpath(
-                                        f'{platform["platform_id"]}/games-details/{game_id}.json'
-                                    ),
-                                    'w',
-                                    encoding='utf-8',
-                                ) as game_details_cache:
-                                    game_details_cache.write(
-                                        json.dumps(
-                                            compress(game_details),
-                                            separators=(',', ':'),
-                                            ensure_ascii=False,
-                                        )
-                                    )
-
-                                now = (
-                                    datetime.datetime.now(tz=datetime.timezone.utc)
-                                    .replace(tzinfo=datetime.timezone.utc)
-                                    .astimezone(tz=None)
-                                )
+                            if not config.time_estimate_given:
+                                eta_string = time_estimate(config, game_count, game_iterator)
 
                                 eprint(
-                                    f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})... done.\n',
-                                    overwrite=True,
+                                    f'{Font.heading}• Estimated completion time: {eta_string} (doesn\'t account for retries or response delays){Font.end}',
                                     wrap=False,
                                 )
 
+                                config.time_estimate_given = True
+
+                            game_iterator += 1
+
+                            now = (
+                                datetime.datetime.now(tz=datetime.timezone.utc)
+                                .replace(tzinfo=datetime.timezone.utc)
+                                .astimezone(tz=None)
+                            )
+
+                            game_response: requests.models.Response = api_request(
+                                f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform["platform_id"]}?api_key={config.api_key}',
+                                config,
+                                message=f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})...',
+                                type='game-details',
+                            )
+
+                            if game_response.status_code == 404:
                                 request_wait(config)
+                                continue
 
-                        if removed_game_ids:
-                            eprint(
-                                f'• {len(removed_game_ids)} game IDs were removed: {", ".join([str(x) for x in sorted(removed_game_ids)])}'
-                            )
-                            eprint('• Deleting removed games from the cache...')
-                            for game_id in removed_game_ids:
-                                if (
-                                    pathlib.Path(config.cache)
-                                    .joinpath(
-                                        f'{platform["platform_id"]}/games-details/{game_id}.json'
+                            game_details: dict[str, Any] = game_response.json()
+
+                            with open(
+                                pathlib.Path(config.cache).joinpath(
+                                    f'{platform["platform_id"]}/games-details/{game_id}.json'
+                                ),
+                                'w',
+                                encoding='utf-8',
+                            ) as game_details_cache:
+                                game_details_cache.write(
+                                    json.dumps(
+                                        compress(game_details),
+                                        separators=(',', ':'),
+                                        ensure_ascii=False,
                                     )
-                                    .is_file()
-                                ):
-                                    pathlib.Path(config.cache).joinpath(
-                                        f'{platform["platform_id"]}/games-details/{game_id}.json'
-                                    ).unlink()
+                                )
 
-                            eprint(
-                                '• Deleting removed games from the cache... done', overwrite=True
+                            now = (
+                                datetime.datetime.now(tz=datetime.timezone.utc)
+                                .replace(tzinfo=datetime.timezone.utc)
+                                .astimezone(tz=None)
                             )
 
-                        # Write out the files for the platform
-                        write_output_files(
-                            config, platform['platform_id'], platform['platform_name']
+                            eprint(
+                                f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})... done.\n',
+                                overwrite=True,
+                                wrap=False,
+                            )
+
+                            request_wait(config)
+
+                    if removed_game_ids:
+                        eprint(
+                            f'• {len(removed_game_ids)} game IDs were removed: {", ".join([str(x) for x in sorted(removed_game_ids)])}'
                         )
-                    else:
-                        eprint('• No games needed to be updated.')
-                else:
-                    eprint(
-                        f'• Not updating the {platform["platform_name"]} platform, as it\'s been more than 21 days since it was last updated. Redownload the platform from scratch to capture the updated game details.',
-                        level='warning',
+                        eprint('• Deleting removed games from the cache...')
+                        for game_id in removed_game_ids:
+                            if (
+                                pathlib.Path(config.cache)
+                                .joinpath(
+                                    f'{platform["platform_id"]}/games-details/{game_id}.json'
+                                )
+                                .is_file()
+                            ):
+                                pathlib.Path(config.cache).joinpath(
+                                    f'{platform["platform_id"]}/games-details/{game_id}.json'
+                                ).unlink()
+
+                        eprint(
+                            '• Deleting removed games from the cache... done', overwrite=True
+                        )
+
+                    # Write out the files for the platform
+                    write_output_files(
+                        config, platform['platform_id'], platform['platform_name']
                     )
-                    continue
+                else:
+                    eprint('• No games needed to be updated.')
+
+
+def time_estimate(config, game_count, game_iterator) -> str:
+    eta: datetime.timedelta = datetime.timedelta(
+        seconds=int((game_count - game_iterator) * (config.rate_limit + 1.25))
+    )
+
+    if not eta:
+        eta: datetime.timedelta = datetime.timedelta(
+            seconds=int((1) * (config.rate_limit + 1.25))
+        )
+
+    eta_list: list[str] = []
+    eta_string: str = ''
+
+    if eta.days:
+        eta_list.append(f'{eta.days!s} days')
+    if int(str(eta)[-8:-6]) != 0:
+        eta_hours: str = str(eta)[-8:-6]
+
+        if eta_hours.startswith('0'):
+            eta_hours = eta_hours[1:]
+
+        eta_list.append(f'{eta_hours} hours')
+    if int(str(eta)[-5:-3]) != 0:
+        eta_minutes: str = str(eta)[-5:-3]
+
+        if eta_minutes.startswith('0'):
+            eta_minutes = eta_minutes[1:]
+
+        eta_list.append(f'{eta_minutes} minutes')
+    if int(str(eta)[-2:]) != 0:
+        eta_seconds: str = str(eta)[-2:]
+
+        if eta_seconds.startswith('0'):
+            eta_seconds = eta_seconds[1:]
+
+        eta_list.append(f'{eta_seconds} seconds')
+
+    if len(eta_list) > 2:
+        eta_list[-1] = f'and {eta_list[-1]}'
+
+        eta_string = ', '.join(eta_list)
+    elif len(eta_list) == 2:
+        eta_list[-1] = f' and {eta_list[-1]}'
+        eta_string = ''.join(eta_list)
+    else:
+        eta_string = ''.join(eta_list)
+
+    return eta_string
 
 
 def write_output_files(config: Config, platform_id: int, platform_name: str) -> None:

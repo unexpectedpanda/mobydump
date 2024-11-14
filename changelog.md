@@ -1,5 +1,20 @@
 # Changelog
 
+# v0.9.1 (12 November 2024)
+
+- MobyDump now only warns, and longer skips an update for a system that hasn't been
+  updated locally for more than 21 days. This is because MobyGames might not update a
+  system's titles for more than 21 days, as opposed to a user not running an update often
+  enough.
+
+- You can now specify a range of platforms to update with `--updaterange`. For example,
+  instead of updating all platforms found on the local disk, `--updaterange 1 4` updates
+  only platforms 1&ndash;4. To download a single platform, specify the same number twice:
+  `--updaterange 1 1`. This can help to limit updates to specific platforms when
+  trying to take things into account like GitHub Action runtime limits.
+
+- A time estimate is now given for platform updates.
+
 # v0.9.0 (10 October 2024)
 
 - Fixed MobyDump crashing if a MobyGames platform has no games.

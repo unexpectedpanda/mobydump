@@ -64,6 +64,20 @@ def user_input() -> argparse.Namespace:
         '\n\n',
     )
 
+    parser.add_argument(
+        '-ur',
+        '--updaterange',
+        metavar='<START_PLATFORM_NUMBER>,<END_PLATFORM_NUMBER>',
+        action='extend',
+        nargs='+',
+        type=int,
+        help=f'R|Must be used with {Font.b}--update{Font.be}, otherwise is ignored.'
+        '\nLimits what platforms to update. For example, '
+        f'\n{Font.b}--updaterange 1 4{Font.be} updates only platforms 1 4, providing'
+        '\ndata for those platforms has already been downloaded.'
+        '\n\n',
+    )
+
     game_update_options.add_argument(
         '-d',
         '--delimiter',
@@ -189,6 +203,20 @@ def user_input() -> argparse.Namespace:
         sys.exit(0)
 
     args: argparse.Namespace = parser.parse_args()
+
+    # Strip numbers less than zero from --updaterange, and only take the first two entries
+    # provided in the remainder
+    if args.updaterange:
+        remove_number: set[int]= set()
+
+        for number in args.updaterange:
+            if number <= 0:
+                remove_number.add(number)
+
+        for number in remove_number:
+            args.updaterange.remove(number)
+
+        args.updaterange = args.updaterange[0:2]
 
     # Handle incompatible arguments
     if args.platforms and args.games:
