@@ -27,6 +27,7 @@ def user_input() -> argparse.Namespace:
     game_update_options: Any = parser.add_argument_group(
         'flags that can be used with --games or --update'
     )
+    update_options: Any = parser.add_argument_group('flags that can be used with --update')
 
     parser.add_argument(
         '-h', '--help', '-?', action='help', default=argparse.SUPPRESS, help=argparse.SUPPRESS
@@ -61,20 +62,6 @@ def user_input() -> argparse.Namespace:
         '\n\nMobyGames only provides update data for the last 21 days. If'
         '\nyou\'ve waited longer, you should redownload the platform from'
         '\nscratch.'
-        '\n\n',
-    )
-
-    parser.add_argument(
-        '-ur',
-        '--updaterange',
-        metavar='<START_PLATFORM_NUMBER>,<END_PLATFORM_NUMBER>',
-        action='extend',
-        nargs='+',
-        type=int,
-        help=f'R|Must be used with {Font.b}--update{Font.be}, otherwise is ignored.'
-        '\nLimits what platforms to update. For example, '
-        f'\n{Font.b}--updaterange 1 4{Font.be} updates only platforms 1 4, providing'
-        '\ndata for those platforms has already been downloaded.'
         '\n\n',
     )
 
@@ -198,6 +185,43 @@ def user_input() -> argparse.Namespace:
         '\n\n',
     )
 
+    update_options.add_argument(
+        '-uc',
+        '--updatecache',
+        action='store_true',
+        help=f'R|Only downloads which games MobyGames has updated in the given'
+        f'\ntime period, and stores them in cache. Individual game details for'
+        '\neach platform aren\'t updated, and no files are written. Useful for'
+        '\nseparating these update stages in things like GitHub Actions.'
+        f'\nLikely used as a step before {Font.b}--writefromcache{Font.be}.'
+        '\n\n',
+    )
+
+    update_options.add_argument(
+        '-ur',
+        '--updaterange',
+        metavar='<START_PLATFORM_NUMBER>,<END_PLATFORM_NUMBER>',
+        action='extend',
+        nargs='+',
+        type=int,
+        help=f'R|Limits what platforms to update. For example, {Font.b}--updaterange 1 4{Font.be}'
+        f'\nupdates only platforms 1 4, providing data for those platforms'
+        '\nhas already been downloaded beforehand.'
+        '\n\n',
+    )
+
+    update_options.add_argument(
+        '-wfc',
+        '--writefromcache',
+        action='store_true',
+        help=f'R|As long as an update cache already exists on the disk, downloads'
+        '\nindividual game detail updates for each platform, and writes output'
+        f'\nfiles. Likely used as a step after {Font.b}--updatecache{Font.be}. If the update'
+        '\ncache doesn\'t exist, it first downloads which games MobyGames has'
+        '\nupdated in the given time period.'
+        '\n\n',
+    )
+
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)
@@ -207,7 +231,7 @@ def user_input() -> argparse.Namespace:
     # Strip numbers less than zero from --updaterange, and only take the first two entries
     # provided in the remainder
     if args.updaterange:
-        remove_number: set[int]= set()
+        remove_number: set[int] = set()
 
         for number in args.updaterange:
             if number <= 0:
@@ -304,5 +328,19 @@ def user_input() -> argparse.Namespace:
         if not 1 <= args.update <= 21:
             eprint('The maximum number of days for updates is 21. Exiting...', level='error')
             sys.exit(1)
+
+    if args.updatecache and not args.update:
+        eprint(
+            f'Must specify {Font.b}--update{Font.be} with {Font.b}--updatecache{Font.be}. Exiting...',
+            level='error',
+        )
+        sys.exit(1)
+
+    if args.updaterange and not args.update:
+        eprint(
+            f'Must specify {Font.b}--update{Font.be} with {Font.b}--updaterange{Font.be}. Exiting...',
+            level='error',
+        )
+        sys.exit(1)
 
     return args

@@ -1,5 +1,17 @@
 # Changelog
 
+# v0.9.2 (17 November 2024)
+
+- Added a flag, `--updatecache`. This only downloads which games MobyGames has updated in
+  the given time period, and stores them in cache. Individual game details for each
+  platform aren't updated, and no files are written. Useful for separating these update
+  stages in things like GitHub Actions. Likely used as a step before `--writefromcache`.
+
+- Added a flag, `--writefromcache`. As long as an update cache already exists on the
+  disk, downloads individual game detail updates for each platform, and writes output
+  files. Likely used as a step after `--updatecache`. If the update cache doesn't exist,
+  it first downloads which games MobyGames has updated in the given time period.
+
 # v0.9.1 (12 November 2024)
 
 - MobyDump now only warns, and longer skips an update for a system that hasn't been
