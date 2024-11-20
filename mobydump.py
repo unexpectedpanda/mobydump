@@ -266,7 +266,7 @@ def main() -> None:
             # cache.
             resume: str = ''
 
-            if not args.forcerestart:
+            if not args.forcerestart and not config.args.writefromcache:
                 if completion_status['stage_1_finished'] and completion_status['stage_2_finished']:
                     while resume != 'r' and resume != 'w' and resume != 'q':
                         eprint(
@@ -277,6 +277,12 @@ def main() -> None:
                         )
                         resume = input('\n> ')
                         eprint('')
+
+            if config.args.writefromcache:
+                resume = 'w'
+                eprint(
+                    f'\n• Writing {platform_name} [ID: {platform_id}] output files from cache...'
+                )
 
             if resume == 'r' or args.forcerestart:
                 completion_status = delete_cache(platform_id, config)

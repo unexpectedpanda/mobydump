@@ -164,6 +164,19 @@ def user_input() -> argparse.Namespace:
         '\n\n',
     )
 
+    game_update_options.add_argument(
+        '-wfc',
+        '--writefromcache',
+        action='store_true',
+        help='R|As long as a games or update cache already exists on the disk,'
+        '\nwrites output files using that cache instead of downloading fresh'
+        '\ndata or prompting the user what to do. If no cache exists, downloads'
+        f'\nfiles as normal. If called with {Font.b}--update{Font.be}, the platform games cache'
+        '\nis generated from the update cache, but the extended individual game'
+        '\ndetails per platform are still downloaded.'
+        '\n\n',
+    )
+
     game_platform_update_options.add_argument(
         '-c',
         '--cache',
@@ -189,7 +202,7 @@ def user_input() -> argparse.Namespace:
         '-uc',
         '--updatecache',
         action='store_true',
-        help=f'R|Only downloads which games MobyGames has updated in the given'
+        help=f'R|Only downloads the games MobyGames has updated in the given'
         f'\ntime period, and stores them in cache. Individual game details for'
         '\neach platform aren\'t updated, and no files are written. Useful for'
         '\nseparating these update stages in things like GitHub Actions.'
@@ -207,18 +220,6 @@ def user_input() -> argparse.Namespace:
         help=f'R|Limits what platforms to update. For example, {Font.b}--updaterange 1 4{Font.be}'
         f'\nupdates only platforms 1 4, providing data for those platforms'
         '\nhas already been downloaded beforehand.'
-        '\n\n',
-    )
-
-    update_options.add_argument(
-        '-wfc',
-        '--writefromcache',
-        action='store_true',
-        help=f'R|As long as an update cache already exists on the disk, downloads'
-        '\nindividual game detail updates for each platform, and writes output'
-        f'\nfiles. Likely used as a step after {Font.b}--updatecache{Font.be}. If the update'
-        '\ncache doesn\'t exist, it first downloads which games MobyGames has'
-        '\nupdated in the given time period.'
         '\n\n',
     )
 
