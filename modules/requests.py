@@ -173,6 +173,38 @@ def download_file(url: str, local_filename: pathlib.Path) -> None:
                 f.write(chunk)
 
 
+def get_dropbox_short_lived_token(config: Config) -> requests.Response:
+    """
+    Gets a short-lived token from Dropbox for uploading files.
+
+    Args:
+        config (Config): The MobyDump config object instance.
+
+    Returns:
+        requests.Response: The response to the token request.
+    """
+    data = {
+        'refresh_token': config.dropbox_refresh_token,
+        'grant_type': 'refresh_token',
+        'client_id': config.dropbox_app_key,
+        'client_secret': config.dropbox_app_secret,
+    }
+
+    try:
+        response = requests.post('https://api.dropbox.com/oauth2/token', data=data)
+
+        response.raise_for_status()
+    except Exception:
+        # Try to get the token one more time, then exit on fail
+        request_wait(config, wait_override=5)
+
+        response = get_dropbox_short_lived_token(config)
+
+        response.raise_for_status()
+
+    return response
+
+
 def request_retry(
     url: str, config: Config, message: str, timeout: int, error_message: str
 ) -> requests.models.Response:
@@ -232,18 +264,25 @@ def request_retry(
     return response
 
 
-def request_wait(config: Config) -> None:
+def request_wait(config: Config, wait_override: int = 0) -> None:
     """
     A countdown timer that limits the rate of requests.
 
     Args:
         config (Config): The MobyDump config object instance.
+        wait_override (int): The number of seconds to use for the wait period, overriding
+          the value stored in the config object.
     """
     non_interactive_output: bool = False
 
-    for i in range(config.rate_limit):
+    countdown: int = config.rate_limit
+
+    if wait_override:
+        countdown = wait_override
+
+    for i in range(countdown):
         if not non_interactive_output:
-            eprint(f'• Waiting {config.rate_limit-i} seconds until next request...', overwrite=True)
+            eprint(f'• Waiting {countdown-i} seconds until next request...', overwrite=True)
 
         if config.args.noninteractive:
             non_interactive_output = True

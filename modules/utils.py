@@ -7,8 +7,6 @@ import sys
 import textwrap
 from typing import Any
 
-import requests
-
 
 class Config:
     def __init__(
@@ -190,19 +188,6 @@ def eprint(
             f'{empty_lines}{Font.d}Press enter to continue{Font.end}', file=sys.stderr
         )
         input()
-
-
-def get_dropbox_short_lived_token(config):
-    data = {
-        'refresh_token': config.dropbox_refresh_token,
-        'grant_type': 'refresh_token',
-        'client_id': config.dropbox_app_key,
-        'client_secret': config.dropbox_app_secret,
-    }
-
-    response = requests.post('https://api.dropbox.com/oauth2/token', data=data)
-
-    return response
 
 
 def old_windows() -> bool:

@@ -21,8 +21,8 @@ from modules.data_sanitize import (
     replace_invalid_characters,
     sanitize_dataframes,
 )
-from modules.requests import api_request, download_file, request_wait
-from modules.utils import Config, Font, eprint, get_dropbox_short_lived_token
+from modules.requests import api_request, download_file, get_dropbox_short_lived_token, request_wait
+from modules.utils import Config, Font, eprint
 
 if TYPE_CHECKING:
     import requests
@@ -1436,7 +1436,7 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
         local_file = pathlib.Path(f'{file_platform_name}.zip')
         dropbox_path = f'/{file_platform_name}.zip'
 
-        # Get an access token
+        # Get a Dropbox access token
         if not config.dropbox_access_token:
             response = get_dropbox_short_lived_token(config)
 
