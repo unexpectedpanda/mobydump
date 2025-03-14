@@ -1,5 +1,11 @@
 # Changelog
 
+# v0.9.4 (20 November 2024)
+
+- Added new MobyGames API plan details.
+
+- Set the default rate to 1 request every 5 seconds, down from 1 request every 10 seconds.
+
 # v0.9.3 (20 November 2024)
 
 - Enabled `--writefromcache` for `--games`.

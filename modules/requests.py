@@ -275,18 +275,26 @@ def request_wait(config: Config, wait_override: int = 0) -> None:
     """
     non_interactive_output: bool = False
 
-    countdown: int = config.rate_limit
+    countdown: int|float = config.rate_limit
 
     if wait_override:
         countdown = wait_override
 
-    for i in range(countdown):
+    if countdown < 1:
         if not non_interactive_output:
-            eprint(f'• Waiting {countdown-i} seconds until next request...', overwrite=True)
+                eprint(f'• Waiting {countdown} seconds until next request...', overwrite=True)
+        sleep(countdown)
+    else:
+        for i in range(int(countdown)):
+            if not non_interactive_output:
+                if int(countdown) - i == 1:
+                    eprint(f'• Waiting {int(countdown) - i} second until next request...', overwrite=True)
+                else:
+                    eprint(f'• Waiting {int(countdown) - i} seconds until next request...', overwrite=True)
 
-        if config.args.noninteractive:
-            non_interactive_output = True
-        sleep(1)
+            if config.args.noninteractive:
+                non_interactive_output = True
+            sleep(1)
 
     # Delete the previous line printed to screen
     eprint('\033M\033[2K\033M')

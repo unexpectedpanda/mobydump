@@ -894,13 +894,22 @@ def get_updates(config: Config) -> None:
                             )
                             eprint('• Downloading updated game details.')
 
-                            # Get the updated game details
-                            config.time_estimate_given = False
+                            updated_platform_games_sorted = sorted(
+                                updated_platform_related_games, key=lambda x: x['game_id']
+                            )
                             game_iterator = 0
 
-                            for updated_platform_related_game in sorted(
-                                updated_platform_related_games, key=lambda x: x['game_id']
-                            ):
+                            # Start downloading game details part way through the update list if the right argument is passed
+                            if config.args.gameupdateindex:
+                                updated_platform_games_sorted = sorted(
+                                    updated_platform_related_games, key=lambda x: x['game_id']
+                                )[config.args.gameupdateindex - 1 :]
+                                game_iterator = config.args.gameupdateindex - 1
+
+                            # Get the updated game details
+                            config.time_estimate_given = False
+
+                            for updated_platform_related_game in updated_platform_games_sorted:
                                 game_id = updated_platform_related_game['game_id']
                                 game_title = updated_platform_related_game['title']
                                 game_count = len(updated_platform_related_games)

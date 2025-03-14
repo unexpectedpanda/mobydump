@@ -25,6 +25,7 @@ from modules.get_mg_data import (
     write_output_files,
 )
 from modules.input import user_input
+from modules.mdlogo import mobydump_logo
 from modules.requests import request_wait
 from modules.utils import Config, Font, eprint, old_windows
 
@@ -97,7 +98,7 @@ def main() -> None:
             cache_path = pathlib.Path(args.cache)
 
         # Set the rate limit
-        rate_limit: int = 10
+        rate_limit: int = 5
 
         if os.getenv('MOBY_RATE'):
             rate_limit = int(os.getenv('MOBY_RATE'))  # type: ignore
@@ -165,18 +166,7 @@ def main() -> None:
             cache_path,
         )
 
-        eprint('\n', wrap=False)
-        eprint(r' /~~~~~~~~~~~~~)', wrap=False)
-        eprint(r'(                )', wrap=False)
-        eprint(r'\        (o)      )', wrap=False)
-        eprint(r' \______/          )', wrap=False)
-        eprint(r'     \____          )', wrap=False)
-        eprint(r'    ___ __\       )', wrap=False)
-        eprint(r'   /_/\_\____    )  ', wrap=False)
-        eprint(r'   __       /  /', wrap=False)
-        eprint(r'   \ \_____/  /', wrap=False)
-        eprint(r'   / ________/   ', wrap=False)
-        eprint(f'  /_/ MOBYDUMP {const.__version__}\n', wrap=False)
+        mobydump_logo()
 
         # ================================================================================
         # Get platforms if requested by the user

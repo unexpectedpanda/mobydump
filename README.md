@@ -65,11 +65,15 @@ do so, complete the following steps:
     passing a command line argument:
 
     ```none
-    MOBY_RATE=10
+    MOBY_RATE=1
     ```
 
-    Valid values are `10` for the legacy free API key (no longer issued by MobyGames), or
-    `5` for the MobyPro API key.
+    Valid values are as follows:
+
+    * 5 - MobyGames Hobbyist API key
+    * 1 - MobyGames Bronze API key
+    * 0.25 - MobyGames Silver API key
+    * 0.125 - MobyGames Gold API key
 
     Use lower numbers at your own risk. Unless you have an agreement with MobyGames, lower
     numbers than are suitable for your API key could get your client or API key banned.
@@ -295,15 +299,40 @@ Flags that can be used with `--games` or `--update`:
 
   -r <SECONDS_PER_REQUEST>, --ratelimit <SECONDS_PER_REQUEST>
                         How many seconds to wait between requests. When not specified,
-                        defaults to 10. Overrides the MOBY_RATE environment variable.
+                        defaults to 5. Overrides the MOBY_RATE environment variable.
                         Choose a number from the following list:
 
-                        10 - MobyGames non-commercial free API key
-                        5  - MobyPro non-commercial API key
+                        5 - MobyGames Hobbyist API key
+                        1 - MobyGames Bronze API key
+                        0.25 - MobyGames Silver API key
+                        0.125 - MobyGames Gold API key
 
                         Use lower numbers at your own risk. Unless you have an agreement
                         with MobyGames, lower numbers than are suitable for your API key
                         could get your client or API key banned.
+
+  -wfc, --writefromcache
+                        As long as a games or update cache already exists on the disk,
+                        writes output files using that cache instead of downloading fresh
+                        data or prompting the user what to do. If no cache exists, downloads
+                        files as normal. If called with --update, the platform games cache
+                        is generated from the update cache, but the extended individual game
+                        details per platform are still downloaded.
+```
+
+Flags that can be used with `--update`:
+
+```
+  -uc, --updatecache    Only downloads the games MobyGames has updated in the given time
+                        time period, and stores them in cache. Individual game details for
+                        each platform aren't updated, and no files are written. Useful for
+                        separating update stages in things like GitHub Actions. Likely used
+                        as a step before --writefromcache.
+
+  -ur <START_PLATFORM_NUMBER> <END_PLATFORM_NUMBER> [<START_PLATFORM_NUMBER> <END_PLATFORM_NUMBER> ...], --updaterange <START_PLATFORM_NUMBER> <END_PLATFORM_NUMBER> [<START_PLATFORM_NUMBER> <END_PLATFORM_NUMBER> ...]
+                        Limits what platforms to update. For example, --updaterange 1 4
+                        updates only platforms 1 4, providing data for those platforms
+                        has already been downloaded beforehand.
 ```
 
 ## Known limitations

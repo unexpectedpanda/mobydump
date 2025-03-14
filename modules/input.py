@@ -3,6 +3,7 @@ import sys
 from typing import Any
 
 import modules.constants as const
+from modules.mdlogo import mobydump_logo
 from modules.utils import Font, SmartFormatter, eprint
 
 
@@ -152,12 +153,14 @@ def user_input() -> argparse.Namespace:
         '-r',
         '--ratelimit',
         metavar='<SECONDS_PER_REQUEST>',
-        type=int,
+        type=float,
         help=f'R|How many seconds to wait between requests. When not specified,'
-        f'\ndefaults to {Font.b}10{Font.be}. Overrides the {Font.b}MOBY_RATE{Font.be} environment variable.'
+        f'\ndefaults to {Font.b}5{Font.be}. Overrides the {Font.b}MOBY_RATE{Font.be} environment variable.'
         '\nChoose a number from the following list:'
-        '\n\n10 - MobyGames non-commercial free API key'
-        '\n5  - MobyPro non-commercial API key'
+        '\n\n5 - MobyGames Hobbyist API key'
+        '\n1 - MobyGames Bronze API key'
+        '\n0.25 - MobyGames Silver API key'
+        '\n0.125 - MobyGames Gold API key'
         '\n\nUse lower numbers at your own risk. Unless you have an agreement'
         '\nwith MobyGames, lower numbers than are suitable for your API key'
         '\ncould get your client or API key banned.'
@@ -202,18 +205,18 @@ def user_input() -> argparse.Namespace:
         '-uc',
         '--updatecache',
         action='store_true',
-        help=f'R|Only downloads the games MobyGames has updated in the given'
-        f'\ntime period, and stores them in cache. Individual game details for'
-        '\neach platform aren\'t updated, and no files are written. Useful for'
-        '\nseparating these update stages in things like GitHub Actions.'
-        f'\nLikely used as a step before {Font.b}--writefromcache{Font.be}.'
+        help=f'R|Only downloads the games MobyGames has updated in the given time'
+        f'\nperiod, and stores them in cache. Individual game details for each'
+        '\nplatform aren\'t updated, and no files are written. Useful for'
+        '\nseparating update stages in things like GitHub Actions. Likely used as a'
+        f'\nstep before {Font.b}--writefromcache{Font.be}.'
         '\n\n',
     )
 
     update_options.add_argument(
         '-ur',
         '--updaterange',
-        metavar='<START_PLATFORM_NUMBER>,<END_PLATFORM_NUMBER>',
+        metavar='<START_PLATFORM_NUMBER> <END_PLATFORM_NUMBER>',
         action='extend',
         nargs='+',
         type=int,
@@ -223,7 +226,22 @@ def user_input() -> argparse.Namespace:
         '\n\n',
     )
 
+    update_options.add_argument(
+        '-gi',
+        '--gameupdateindex',
+        metavar='<NUMBER_TO_START_FROM>',
+        type=int,
+        help=argparse.SUPPRESS,
+        # help=f'R|A hacky way to resume updates that break during the individual game'
+        # '\ndetails download phase for a platform when writing from cache. Add the'
+        # '\ndownload index you want to start from. For example, if the download'
+        # f'\nbreaks at game update 1,002/3,965, use {Font.b}1002{Font.be} as the number. This is not'
+        # '\nthe MobyGames ID, just how many updates have been downloaded already for'
+        # '\nthe platform.',
+    )
+
     if len(sys.argv) == 1:
+        mobydump_logo()
         parser.print_help()
         sys.exit(0)
 
