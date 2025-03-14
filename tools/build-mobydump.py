@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import zipfile
 
-def main():
+def main() -> None:
 # Set the zip compression
     compression: int = zipfile.ZIP_DEFLATED
 
