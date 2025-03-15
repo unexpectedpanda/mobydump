@@ -1,6 +1,6 @@
 # Changelog
 
-# v0.9.4 (20 November 2024)
+# v0.9.4 (15 February 2025)
 
 - Added new MobyGames API plan details.
 
