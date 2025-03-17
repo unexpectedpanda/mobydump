@@ -689,7 +689,7 @@ def get_updates(config: Config) -> None:
                     if rd.months and rd.days > 21:
                         eprint(
                             f'• It\'s been more than 21 days since the {platform["platform_name"]} platform was updated. It\'s possible that MobyGames hasn\'t updated the platform in this time, but if you\'re running the '
-                            'update command manually and haven\'t done so in a long time, you might want to redownload the platform from scratch instead to capture new game details.',
+                            'update command manually and haven\'t done so in a long time, you might want to redownload the platform from scratch instead to capture new game details.\n',
                             level='warning',
                         )
 
