@@ -11,7 +11,7 @@ import dateutil
 import dropbox
 import numpy as np
 import pandas as pd
-from compress_json import compress, decompress
+from compress_json import compress, decompress # pip install compress-json-python
 from dropbox.exceptions import ApiError, AuthError
 from dropbox.files import WriteMode
 from natsort import natsorted
