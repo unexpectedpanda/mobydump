@@ -105,6 +105,7 @@ def delete_cache(cache_folder: int | str, config: Config) -> dict[str, bool | st
 
     return completion_status
 
+
 def get_datetime() -> datetime.datetime:
     """
     Convenience wrapper to get the current date and time.
@@ -112,7 +113,11 @@ def get_datetime() -> datetime.datetime:
     Returns:
         datetime.datetime: The current date and time.
     """
-    return datetime.datetime.now(tz=datetime.timezone.utc).replace(tzinfo=datetime.timezone.utc).astimezone(tz=None)
+    return (
+        datetime.datetime.now(tz=datetime.timezone.utc)
+        .replace(tzinfo=datetime.timezone.utc)
+        .astimezone(tz=None)
+    )
 
 
 def get_games(
@@ -503,7 +508,7 @@ def get_updates(config: Config) -> None:
                 if ['update_last_run']:
                     # Don't resume a partially completed update if more than 6 hours has
                     # passed
-                    now = datetime.datetime.now()
+                    now = datetime.datetime.now()  # noqa: DTZ005
 
                     update_last_run = datetime.datetime.strptime(  # noqa: DTZ007
                         completion_status['update_last_run'], '%Y/%m/%d %H:%M'
@@ -1114,7 +1119,9 @@ def get_updates(config: Config) -> None:
                                         f'[{x!s}](https://www.mobygames.com/game/{x}/)'
                                         for x in sorted(removed_game_ids)
                                     ]
-                                    discord_webhook.send(f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Deleted the following game IDs:')
+                                    discord_webhook.send(
+                                        f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Deleted the following game IDs:'
+                                    )
                                     game_id_chunk = 10
                                     for i in range(0, len(removed_game_ids_message), game_id_chunk):
                                         discord_webhook.send(
@@ -1129,7 +1136,8 @@ def get_updates(config: Config) -> None:
                         if discord_webhook:
                             try:
                                 output_message = discord_webhook.send(
-                                    f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Generating output files...', wait=True
+                                    f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Generating output files...',
+                                    wait=True,
                                 )
                             except Exception as e:
                                 eprint(f'• Failed to send Discord message: {e}')
@@ -1141,7 +1149,8 @@ def get_updates(config: Config) -> None:
                         if discord_webhook:
                             try:
                                 discord_webhook.edit_message(
-                                    output_message.id, content=f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Generating output files... done.'
+                                    output_message.id,
+                                    content=f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Generating output files... done.',
                                 )
                                 discord_webhook.send(
                                     content=f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] The **{platform["platform_name"]}** platform [Platform ID: {platform["platform_id"]}] now has **{len(game_ids):,}** games.'
