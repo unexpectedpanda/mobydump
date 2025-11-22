@@ -189,7 +189,8 @@ def user_input() -> argparse.Namespace:
         '--skipdetails',
         action='store_true',
         help='R|Only download the basic game information, skip downloading in-depth'
-        '\nindividual title details like alternate titles, genres, attributes, and more.'
+        '\nindividual title details like alternate titles, genres, attributes,'
+        '\nand more.'
         '\n\n',
     )
 

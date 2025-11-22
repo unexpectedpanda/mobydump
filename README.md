@@ -239,12 +239,12 @@ The following flags are available to use.
 options:
   -p, --platforms       Get the platforms and their IDs from MobyGames.
 
-  -g <PLATFORM_ID>, --games <PLATFORM_ID>
+  -g, --games <PLATFORM_ID>
                         Get all game details from MobyGames that belong to a specific
                         platform ID, and output the result to files. See flags that can be
                         used with --games to change this behavior.
 
-  -u <NUMBER_OF_DAYS>, --update <NUMBER_OF_DAYS>
+  -u, --update <NUMBER_OF_DAYS>
                         Update all the games details for the platforms you've already
                         downloaded, and output the result to files. See flags that can be
                         used with --update to change this behavior.
@@ -257,21 +257,21 @@ options:
 Flags that can be used with `--platforms`, `--games`, or `--update`:
 
 ```
-  -c "<CACHE_PATH>", --cache "<CACHE_PATH>"
+  -c, --cache "<CACHE_PATH>"
                         Change the cache path. Defaults to cache in the same folder
                         MobyDump is in.
 
-  -ua "<USER_AGENT>", --useragent "<USER_AGENT>"
+  -ua, --useragent "<USER_AGENT>"
                         Change the user agent MobyDump supplies when making requests.
                         Defaults to:
 
-                        MobyDump/0.8; https://github.com/unexpectedpanda/mobydump
+                        MobyDump/0.9.5; https://github.com/unexpectedpanda/mobydump
 ```
 
 Flags that can be used with `--games` or `--update`:
 
 ```
-  -d "<DELIMITER>", --delimiter "<DELIMITER>"
+  -d, --delimiter "<DELIMITER>"
                         The single character delimiter to use in the output files. Accepts
                         single-byte characters only. When not specified, defaults to tab.
                         Ignored if output is set to JSON.
@@ -285,7 +285,7 @@ Flags that can be used with `--games` or `--update`:
   -n, --noninteractive  Make MobyDump output less chatty for non-interactive terminals, so
                         logs don't get out of control.
 
-  -o <FILE_TYPE_ID>, --output <FILE_TYPE_ID>
+  -o, --output <FILE_TYPE_ID>
                         The file type to output to. When not specified, defaults to 1.
                         Choose a number from the following list:
 
@@ -297,11 +297,11 @@ Flags that can be used with `--games` or `--update`:
                         Delimiter-separated value files are sanitized for problem
                         characters, JSON data is left raw.
 
-  -pa "<FOLDER_PATH>", --path "<FOLDER_PATH>"
+  -pa, --path "<FOLDER_PATH>"
                         The folder to output files to. When not specified, defaults to
                         MobyDump's folder.
 
-  -pr "<PREFIX>", --prefix "<PREFIX>"
+  -pr, --prefix "<PREFIX>"
                         The prefix to add to the beginning of output filenames. When not
                         specified, defaults to nothing. By default, the output files are
                         named as follows:
@@ -315,7 +315,7 @@ Flags that can be used with `--games` or `--update`:
                         • Platform name - Product codes.txt
                         • Platform name - Ratings.txt
 
-  -r <SECONDS_PER_REQUEST>, --ratelimit <SECONDS_PER_REQUEST>
+  -r, --ratelimit <SECONDS_PER_REQUEST>
                         How many seconds to wait between requests. When not specified,
                         defaults to 5. Overrides the MOBY_RATE environment variable.
                         Choose a number from the following list:
@@ -338,16 +338,27 @@ Flags that can be used with `--games` or `--update`:
                         details per platform are still downloaded.
 ```
 
+Flags that can only be used with `--games`:
+
+```
+  -sd, --skipdetails    Only download the basic game information, skip downloading in-depth
+                        individual title details like alternate titles, genres, attributes,
+                        and more.
+```
+
 Flags that can be used with `--update`:
 
 ```
-  -uc, --updatecache    Only downloads the games MobyGames has updated in the given time
-                        time period, and stores them in cache. Individual game details for
-                        each platform aren't updated, and no files are written. Useful for
-                        separating update stages in things like GitHub Actions. Likely used
-                        as a step before --writefromcache.
+  -di, --discord        Report updates to a Discord webhook. Useful if running MobyDump on a
+                        schedule from something like a GitHub Action.
 
-  -ur <START_PLATFORM_NUMBER> <END_PLATFORM_NUMBER> [<START_PLATFORM_NUMBER> <END_PLATFORM_NUMBER> ...], --updaterange <START_PLATFORM_NUMBER> <END_PLATFORM_NUMBER> [<START_PLATFORM_NUMBER> <END_PLATFORM_NUMBER> ...]
+  -uc, --updatecache    Only downloads the games MobyGames has updated in the given time
+                        period, and stores them in cache. Individual game details for each
+                        platform aren't updated, and no files are written. Useful for
+                        separating update stages in things like GitHub Actions. Likely used as a
+                        step before --writefromcache.
+
+  -ur, --updaterange <START_PLATFORM_NUMBER> <END_PLATFORM_NUMBER> [<START_PLATFORM_NUMBER> <END_PLATFORM_NUMBER> ...]
                         Limits what platforms to update. For example, --updaterange 1 4
                         updates only platforms 1 4, providing data for those platforms
                         has already been downloaded beforehand.

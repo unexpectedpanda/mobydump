@@ -704,7 +704,7 @@ def get_updates(config: Config) -> None:
             try:
                 discord_webhook.edit_message(
                     update_message.id,
-                    content=f'• Getting updates from MobyGames from the last {config.args.update} days... done.',
+                    content=f'• Getting updates from MobyGames from the last **{config.args.update}** days... done.',
                 )
             except Exception as e:
                 eprint(f'• Failed to send Discord message: {e}')
