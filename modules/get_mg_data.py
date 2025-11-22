@@ -66,15 +66,9 @@ def delete_cache(cache_folder: int | str, config: Config) -> dict[str, bool | st
             game_file.unlink()
 
         # Rewrite the status file
-        now = (
-            datetime.datetime.now(tz=datetime.timezone.utc)
-            .replace(tzinfo=datetime.timezone.utc)
-            .astimezone(tz=None)
-        )
-
         completion_status = {
             'update_finished': False,
-            'update_last_run': now.strftime("%Y/%m/%d %H:%M"),
+            'update_last_run': get_datetime().strftime("%Y/%m/%d %H:%M"),
         }
 
         with open(
@@ -96,16 +90,10 @@ def delete_cache(cache_folder: int | str, config: Config) -> dict[str, bool | st
                 game_details_file.unlink()
 
         # Rewrite the status file
-        now = (
-            datetime.datetime.now(tz=datetime.timezone.utc)
-            .replace(tzinfo=datetime.timezone.utc)
-            .astimezone(tz=None)
-        )
-
         completion_status = {
             'stage_1_finished': False,
             'stage_2_finished': False,
-            'last_updated': now.strftime("%Y/%m/%d"),
+            'last_updated': get_datetime().strftime("%Y/%m/%d"),
         }
 
         with open(
@@ -116,6 +104,15 @@ def delete_cache(cache_folder: int | str, config: Config) -> dict[str, bool | st
             status_cache.write(json.dumps(completion_status, indent=2, ensure_ascii=False))
 
     return completion_status
+
+def get_datetime() -> datetime.datetime:
+    """
+    Convenience wrapper to get the current date and time.
+
+    Returns:
+        datetime.datetime: The current date and time.
+    """
+    return datetime.datetime.now(tz=datetime.timezone.utc).replace(tzinfo=datetime.timezone.utc).astimezone(tz=None)
 
 
 def get_games(
@@ -130,8 +127,6 @@ def get_games(
         completion_status (dict[str, bool]): Which stages MobyDump has finished.
         config (Config): The MobyDump config object instance.
     """
-    now: datetime.datetime
-
     platform_str_length: int = len(f'Retrieving games from {platform_name} [ID: {platform_id}]')
     horizontal_line_length: int = int((80 - platform_str_length - 10) / 2)
     horizontal_line: str = '─' * horizontal_line_length
@@ -174,16 +169,10 @@ def get_games(
     while True:
         if not completion_status['stage_1_finished']:
             # Make the request for the platform's games
-            now = (
-                datetime.datetime.now(tz=datetime.timezone.utc)
-                .replace(tzinfo=datetime.timezone.utc)
-                .astimezone(tz=None)
-            )
-
             game_dict: dict[str, Any] = api_request(
                 f'https://api.mobygames.com/v1/games?api_key={config.api_key}&platform={platform_id}&offset={offset}&limit={offset_increment}',
                 config,
-                message=f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting titles {offset}-{offset+offset_increment}...',
+                message=f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Requesting titles {offset}-{offset+offset_increment}...',
             ).json()
 
             # Increment the offset
@@ -199,14 +188,8 @@ def get_games(
                         pass
 
                 # Break the loop if there's less than 100 titles, as we've reached the end
-                now = (
-                    datetime.datetime.now(tz=datetime.timezone.utc)
-                    .replace(tzinfo=datetime.timezone.utc)
-                    .astimezone(tz=None)
-                )
-
                 eprint(
-                    f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting titles {offset-offset_increment}-{offset}... done.\n',
+                    f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Requesting titles {offset-offset_increment}-{offset}... done.\n',
                     overwrite=True,
                 )
 
@@ -265,8 +248,6 @@ def get_game_details(
         config (Config): The MobyDump config object instance.
     """
     if not config.args.skipdetails:
-        now: datetime.datetime
-
         platform_str_length: int = len(f'Retrieving games from {platform_name} [ID: {platform_id}]')
         horizontal_line_length: int = int((80 - platform_str_length - 10) / 2)
         horizontal_line: str = '─' * horizontal_line_length
@@ -347,16 +328,10 @@ def get_game_details(
 
                         config.time_estimate_given = True
 
-                    now = (
-                        datetime.datetime.now(tz=datetime.timezone.utc)
-                        .replace(tzinfo=datetime.timezone.utc)
-                        .astimezone(tz=None)
-                    )
-
                     game_response: requests.models.Response = api_request(
                         f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform_id}?api_key={config.api_key}',
                         config,
-                        message=f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})...',
+                        message=f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})...',
                         type='game-details',
                     )
 
@@ -379,14 +354,8 @@ def get_game_details(
                             )
                         )
 
-                    now = (
-                        datetime.datetime.now(tz=datetime.timezone.utc)
-                        .replace(tzinfo=datetime.timezone.utc)
-                        .astimezone(tz=None)
-                    )
-
                     eprint(
-                        f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})... done.\n',
+                        f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})... done.\n',
                         overwrite=True,
                         wrap=False,
                     )
@@ -534,7 +503,7 @@ def get_updates(config: Config) -> None:
                 if ['update_last_run']:
                     # Don't resume a partially completed update if more than 6 hours has
                     # passed
-                    now = datetime.datetime
+                    now = datetime.datetime.now()
 
                     update_last_run = datetime.datetime.strptime(  # noqa: DTZ007
                         completion_status['update_last_run'], '%Y/%m/%d %H:%M'
@@ -570,17 +539,11 @@ def get_updates(config: Config) -> None:
         sys.exit()
 
     if discord_webhook:
-        now = (
-            datetime.datetime.now(tz=datetime.timezone.utc)
-            .replace(tzinfo=datetime.timezone.utc)
-            .astimezone(tz=None)
-        )
-
         try:
             discord_webhook.send('\u200B')
-            discord_webhook.send(f'# Starting updates {now.strftime("%Y/%m/%d")} ')
+            discord_webhook.send(f'# Starting updates {get_datetime().strftime("%Y/%m/%d")} ')
             update_message = discord_webhook.send(
-                f'• Getting updates from MobyGames from the last **{config.args.update}** days...',
+                f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Getting updates from MobyGames from the last **{config.args.update}** days...',
                 wait=True,
             )
         except Exception as e:
@@ -623,16 +586,10 @@ def get_updates(config: Config) -> None:
                 i += 1
 
             # Make the request for updated games
-            now = (
-                datetime.datetime.now(tz=datetime.timezone.utc)
-                .replace(tzinfo=datetime.timezone.utc)
-                .astimezone(tz=None)
-            )
-
             game_dict: dict[str, Any] = api_request(
                 f'https://api.mobygames.com/v1/games/recent?api_key={config.api_key}&format=normal&age={config.args.update}&offset={offset}&limit={offset_increment}',
                 config,
-                message=f'• [{now.strftime("%H:%M:%S")}] Requesting updated titles {offset}-{offset+offset_increment}...',
+                message=f'• [{get_datetime().strftime("%H:%M:%S")}] Requesting updated titles {offset}-{offset+offset_increment}...',
             ).json()
 
             # Increment the offset
@@ -648,14 +605,8 @@ def get_updates(config: Config) -> None:
                         pass
 
                 # Break the loop if there's less than 100 titles, as we've reached the end
-                now = (
-                    datetime.datetime.now(tz=datetime.timezone.utc)
-                    .replace(tzinfo=datetime.timezone.utc)
-                    .astimezone(tz=None)
-                )
-
                 eprint(
-                    f'• [{now.strftime("%H:%M:%S")}] Requesting updated titles {offset-offset_increment}-{offset}... done.\n',
+                    f'• [{get_datetime().strftime("%H:%M:%S")}] Requesting updated titles {offset-offset_increment}-{offset}... done.\n',
                     overwrite=True,
                 )
 
@@ -681,13 +632,7 @@ def get_updates(config: Config) -> None:
                 )
 
             # Write the completion status
-            now = (
-                datetime.datetime.now(tz=datetime.timezone.utc)
-                .replace(tzinfo=datetime.timezone.utc)
-                .astimezone(tz=None)
-            )
-
-            completion_status['update_last_run'] = now.strftime("%Y/%m/%d %H:%M")
+            completion_status['update_last_run'] = get_datetime().strftime("%Y/%m/%d %H:%M")
             completion_status['days_to_update'] = config.args.update
 
             with open(
@@ -704,7 +649,7 @@ def get_updates(config: Config) -> None:
             try:
                 discord_webhook.edit_message(
                     update_message.id,
-                    content=f'• Getting updates from MobyGames from the last **{config.args.update}** days... done.',
+                    content=f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Getting updates from MobyGames from the last **{config.args.update}** days... done.',
                 )
             except Exception as e:
                 eprint(f'• Failed to send Discord message: {e}')
@@ -781,13 +726,7 @@ def get_updates(config: Config) -> None:
                             continue
 
                 if last_updated:
-                    now = (
-                        datetime.datetime.now(tz=datetime.timezone.utc)
-                        .replace(tzinfo=datetime.timezone.utc)
-                        .astimezone(tz=None)
-                    )
-
-                    rd = dateutil.relativedelta.relativedelta(now, last_updated)
+                    rd = dateutil.relativedelta.relativedelta(get_datetime(), last_updated)
 
                     if rd.months and rd.days > 21:
                         eprint(
@@ -857,7 +796,7 @@ def get_updates(config: Config) -> None:
                                 discord_webhook.send('\u200B')
                                 discord_webhook.send(f'## {platform["platform_name"]}')
                                 applying_updates_message = discord_webhook.send(
-                                    f'• Applying updates to the **{platform["platform_name"]}** platform [Platform ID: {platform["platform_id"]}]. As of the last update, it had **{original_number_of_games:,}** games.',
+                                    f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Applying updates to the **{platform["platform_name"]}** platform [Platform ID: {platform["platform_id"]}]. As of the last update, it had **{original_number_of_games:,}** games.',
                                     wait=True,
                                 )
                             except Exception as e:
@@ -887,7 +826,7 @@ def get_updates(config: Config) -> None:
                                 try:
                                     discord_webhook.edit_message(
                                         applying_updates_message.id,
-                                        content=f'• ~~Applying updates to the **{platform["platform_name"]}** platform [Platform ID: {platform["platform_id"]}]. As of the last update, it had **{original_number_of_games:,}** games.~~ _No updates found, skipping._',
+                                        content=f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] ~~Applying updates to the **{platform["platform_name"]}** platform [Platform ID: {platform["platform_id"]}]. As of the last update, it had **{original_number_of_games:,}** games.~~ _No updates found, skipping._',
                                     )
                                 except Exception as e:
                                     eprint(f'• Failed to send Discord message: {e}')
@@ -896,7 +835,7 @@ def get_updates(config: Config) -> None:
                         if discord_webhook:
                             try:
                                 update_message = discord_webhook.send(
-                                    f'• Adding or updating **{len(updated_platform_related_games)}** games in the **{platform["platform_name"]}** platform cache, and deleting **{len(removed_game_ids)}** games...',
+                                    f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Adding or updating **{len(updated_platform_related_games)}** games in the **{platform["platform_name"]}** platform cache, and deleting **{len(removed_game_ids)}** games...',
                                     wait=True,
                                 )
                             except Exception as e:
@@ -997,16 +936,10 @@ def get_updates(config: Config) -> None:
                             )
 
                         # Update cache file
-                        now = (
-                            datetime.datetime.now(tz=datetime.timezone.utc)
-                            .replace(tzinfo=datetime.timezone.utc)
-                            .astimezone(tz=None)
-                        )
-
                         completion_status: dict[str, bool] = {
                             'stage_1_finished': True,
                             'stage_2_finished': True,
-                            'last_updated': now.strftime("%Y/%m/%d"),
+                            'last_updated': get_datetime().strftime("%Y/%m/%d"),
                         }
 
                         with open(
@@ -1026,7 +959,7 @@ def get_updates(config: Config) -> None:
                             try:
                                 discord_webhook.edit_message(
                                     update_message.id,
-                                    content=f'• Adding or updating **{len(updated_platform_related_games)}** games in the **{platform["platform_name"]}** platform cache, and deleting **{len(removed_game_ids)}** games... done.',
+                                    content=f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Adding or updating **{len(updated_platform_related_games)}** games in the **{platform["platform_name"]}** platform cache, and deleting **{len(removed_game_ids)}** games... done.',
                                 )
                                 if len(removed_game_ids) / original_number_of_games > 0.05:
                                     discord_webhook.send(
@@ -1052,7 +985,7 @@ def get_updates(config: Config) -> None:
                                 ]
                                 try:
                                     discord_webhook.send(
-                                        '• Added or updated the following game IDs:'
+                                        f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Added or updated the following game IDs:'
                                     )
                                 except Exception as e:
                                     eprint(f'• Failed to send Discord message: {e}')
@@ -1101,7 +1034,7 @@ def get_updates(config: Config) -> None:
                                     if discord_webhook:
                                         try:
                                             discord_webhook.send(
-                                                f'• Downloading extended details for individual games, estimated completion is in {eta_string} (doesn\'t account for retries or response delays)...'
+                                                f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Downloading extended details for individual games, estimated completion is in {eta_string} (doesn\'t account for retries or response delays)...'
                                             )
                                         except Exception as e:
                                             eprint(f'• Failed to send Discord message: {e}')
@@ -1110,16 +1043,10 @@ def get_updates(config: Config) -> None:
 
                                 game_iterator += 1
 
-                                now = (
-                                    datetime.datetime.now(tz=datetime.timezone.utc)
-                                    .replace(tzinfo=datetime.timezone.utc)
-                                    .astimezone(tz=None)
-                                )
-
                                 game_response: requests.models.Response = api_request(
                                     f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform["platform_id"]}?api_key={config.api_key}',
                                     config,
-                                    message=f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})...',
+                                    message=f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})...',
                                     type='game-details',
                                 )
 
@@ -1144,14 +1071,8 @@ def get_updates(config: Config) -> None:
                                         )
                                     )
 
-                                now = (
-                                    datetime.datetime.now(tz=datetime.timezone.utc)
-                                    .replace(tzinfo=datetime.timezone.utc)
-                                    .astimezone(tz=None)
-                                )
-
                                 eprint(
-                                    f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})... done.\n',
+                                    f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})... done.\n',
                                     overwrite=True,
                                     wrap=False,
                                 )
@@ -1161,7 +1082,7 @@ def get_updates(config: Config) -> None:
                             if discord_webhook:
                                 try:
                                     discord_webhook.send(
-                                        f'• Finished downloading extended game details for **{platform["platform_name"]}**.'
+                                        f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Finished downloading extended game details for **{platform["platform_name"]}**.'
                                     )
                                 except Exception as e:
                                     eprint(f'• Failed to send Discord message: {e}')
@@ -1193,7 +1114,7 @@ def get_updates(config: Config) -> None:
                                         f'[{x!s}](https://www.mobygames.com/game/{x}/)'
                                         for x in sorted(removed_game_ids)
                                     ]
-                                    discord_webhook.send('• Deleted the following game IDs:')
+                                    discord_webhook.send(f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Deleted the following game IDs:')
                                     game_id_chunk = 10
                                     for i in range(0, len(removed_game_ids_message), game_id_chunk):
                                         discord_webhook.send(
@@ -1208,7 +1129,7 @@ def get_updates(config: Config) -> None:
                         if discord_webhook:
                             try:
                                 output_message = discord_webhook.send(
-                                    '• Generating output files...', wait=True
+                                    f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Generating output files...', wait=True
                                 )
                             except Exception as e:
                                 eprint(f'• Failed to send Discord message: {e}')
@@ -1220,13 +1141,13 @@ def get_updates(config: Config) -> None:
                         if discord_webhook:
                             try:
                                 discord_webhook.edit_message(
-                                    output_message.id, content='• Generating output files... done.'
+                                    output_message.id, content=f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Generating output files... done.'
                                 )
                                 discord_webhook.send(
-                                    content=f'• The **{platform["platform_name"]}** platform [Platform ID: {platform["platform_id"]}] now has **{len(game_ids):,}** games.'
+                                    content=f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] The **{platform["platform_name"]}** platform [Platform ID: {platform["platform_id"]}] now has **{len(game_ids):,}** games.'
                                 )
                                 discord_webhook.send(
-                                    f'• {platform['platform_name']} update completed'
+                                    f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] {platform['platform_name']} update completed'
                                 )
                             except Exception as e:
                                 eprint(f'• Failed to send Discord message: {e}')
