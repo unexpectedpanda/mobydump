@@ -25,10 +25,14 @@ def user_input() -> argparse.Namespace:
     game_platform_update_options: Any = parser.add_argument_group(
         'flags that can be used with --platforms, --games, or --update'
     )
+
     game_update_options: Any = parser.add_argument_group(
         'flags that can be used with --games or --update'
     )
-    update_options: Any = parser.add_argument_group('flags that can be used with --update')
+
+    game_options: Any = parser.add_argument_group('flags that can only be used with --games')
+
+    update_options: Any = parser.add_argument_group('flags that can only be used with --update')
 
     parser.add_argument(
         '-h', '--help', '-?', action='help', default=argparse.SUPPRESS, help=argparse.SUPPRESS
@@ -180,6 +184,15 @@ def user_input() -> argparse.Namespace:
         '\n\n',
     )
 
+    game_options.add_argument(
+        '-sd',
+        '--skipdetails',
+        action='store_true',
+        help='R|Only download the basic game information, skip downloading in-depth'
+        '\nindividual title details like alternate titles, genres, attributes, and more.'
+        '\n\n',
+    )
+
     game_platform_update_options.add_argument(
         '-c',
         '--cache',
@@ -198,6 +211,15 @@ def user_input() -> argparse.Namespace:
         help=f'R|Change the user agent MobyDump supplies when making requests.'
         '\nDefaults to:'
         f'\n\n{Font.b}MobyDump/{const.__version__}; https://github.com/unexpectedpanda/mobydump{Font.be}'
+        '\n\n',
+    )
+
+    update_options.add_argument(
+        '-di',
+        '--discord',
+        action='store_true',
+        help='R|Report updates to a Discord webhook. Useful if running MobyDump on a'
+        '\nschedule from something like a GitHub Action.'
         '\n\n',
     )
 
@@ -266,7 +288,7 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Can\'t use {Font.b}--platforms{Font.be} and {Font.b}--games{Font.be} together. Exiting...',
             level='error',
-            wrap=False,
+            indent=0,
         )
         sys.exit(1)
 
@@ -274,7 +296,7 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Can\'t use {Font.b}--platforms{Font.be} and {Font.b}--update{Font.be} together. Exiting...',
             level='error',
-            wrap=False,
+            indent=0,
         )
         sys.exit(1)
 
@@ -282,7 +304,7 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Can\'t use {Font.b}--games{Font.be} and {Font.b}--update{Font.be} together. Exiting...',
             level='error',
-            wrap=False,
+            indent=0,
         )
         sys.exit(1)
 
@@ -290,7 +312,7 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Must specify {Font.b}--games{Font.be}, {Font.b}--platforms{Font.be}, or {Font.b}--update{Font.be} with {Font.b}--cache{Font.be}. Exiting...',
             level='error',
-            wrap=False,
+            indent=0,
         )
         sys.exit(1)
 
@@ -298,7 +320,7 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Must specify {Font.b}--games{Font.be} or {Font.b}--update{Font.be} with {Font.b}--delimiter{Font.be}. Exiting...',
             level='error',
-            wrap=False,
+            indent=0,
         )
         sys.exit(1)
 
@@ -306,7 +328,7 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Must specify {Font.b}--games{Font.be} or {Font.b}--update{Font.be} with {Font.b}--output{Font.be}. Exiting...',
             level='error',
-            wrap=False,
+            indent=0,
         )
         sys.exit(1)
 
@@ -323,15 +345,31 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Must specify {Font.b}--games{Font.be} or {Font.b}--update{Font.be} with {Font.b}--prefix{Font.be}. Exiting...',
             level='error',
-            wrap=False,
+            indent=0,
         )
         sys.exit(1)
 
-    if args.ratelimit and not args.games:
+    if args.ratelimit and not (args.games or args.update):
         eprint(
             f'Must specify {Font.b}--games{Font.be} or {Font.b}--update{Font.be} with {Font.b}--ratelimit{Font.be}. Exiting...',
             level='error',
-            wrap=False,
+            indent=0,
+        )
+        sys.exit(1)
+
+    if args.skipdetails and not args.games:
+        eprint(
+            f'Must specify {Font.b}--games{Font.be} with {Font.b}--skipdetails{Font.be}. Exiting...',
+            level='error',
+            indent=0,
+        )
+        sys.exit(1)
+
+    if args.discord and not args.update:
+        eprint(
+            f'Must specify {Font.b}--update{Font.be} with {Font.b}--discord{Font.be}. Exiting...',
+            level='error',
+            indent=0,
         )
         sys.exit(1)
 
@@ -339,7 +377,7 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Must specify {Font.b}--games{Font.be}, {Font.b}--platforms{Font.be}, or {Font.b}--update{Font.be} with {Font.b}--useragent{Font.be}. Exiting...',
             level='error',
-            warp=False,
+            indent=0,
         )
         sys.exit(1)
 
@@ -352,6 +390,7 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Must specify {Font.b}--update{Font.be} with {Font.b}--updatecache{Font.be}. Exiting...',
             level='error',
+            indent=0,
         )
         sys.exit(1)
 
@@ -359,6 +398,15 @@ def user_input() -> argparse.Namespace:
         eprint(
             f'Must specify {Font.b}--update{Font.be} with {Font.b}--updaterange{Font.be}. Exiting...',
             level='error',
+            indent=0,
+        )
+        sys.exit(1)
+
+    if args.writefromcache and args.forcerestart:
+        eprint(
+            f'The {Font.b}--forcerestart{Font.be} and {Font.b}--writefromcache{Font.be} flags can\'t be used at the same time. Exiting...',
+            level='error',
+            indent=0,
         )
         sys.exit(1)
 

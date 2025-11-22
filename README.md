@@ -78,6 +78,24 @@ do so, complete the following steps:
     Use lower numbers at your own risk. Unless you have an agreement with MobyGames, lower
     numbers than are suitable for your API key could get your client or API key banned.
 
+### Set up Discord reporting (optional)
+
+When using MobyDump's `--update` mode, you have the option to report progress through
+Discord with `--discord`. This can be especially useful if you've set up scheduled updates
+through something like GitHub actions:
+
+To enable reporting in a Discord channel:
+
+1.  [Create a webhook in Discord](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks).
+
+1.  In
+    [the same `.env` file in which you set up your API key](#set-up-your-api-key-and-rate-limit),
+    add the following:
+
+    ```
+    DISCORD_WEBHOOK="<YOUR_DISCORD_WEBHOOK>"
+    ```
+
 ### Set up Dropbox for export (optional)
 
 After MobyDump has saved output files to disk, you have the option to upload them to

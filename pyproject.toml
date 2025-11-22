@@ -1,11 +1,11 @@
 [project]
 name = "MobyDump"
 dynamic = ["version"]
-description = 'A GUI that sets stable controller IDs for MAME on Windows 10+'
+description = "MobyDump downloads data from the MobyGames API for a specific platform, and outputs it to a delimiter-separated value file or JSON."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
-keywords = ["MAME", "controller", "remap", "stable", "IDs"]
+keywords = ["MobyGames API", "Microsoft Access"]
 authors = [
   { name = "unexpectedpanda", email = "fake@example.com" },
 ]
@@ -17,11 +17,13 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
 ]
 
 dependencies = [
   "bs4 >= 0.0.2",
   "compress-json-python >= 3.0.0",
+  "discord >= 2.3.2",
   "dropbox >= 12.0.2",
   "html2text >= 2024.2.26",
   "lxml >= 5.2.1",
@@ -50,7 +52,7 @@ path = "modules/constants.py"
 packages = ["mobydump.py", "modules"]
 
 [[tool.hatch.envs.all.matrix]]
-python = ["3.10", "3.11", "3.12"]
+python = ["3.10", "3.11", "3.12", "3.13"]
 
 [tool.hatch.envs.default.scripts]
 all = [
@@ -58,6 +60,10 @@ all = [
     "hatch run types:check",
     "hatch run lint:check",
 ]
+
+# Use UV for dependency installation
+[tool.hatch.envs.default]
+installer = "uv"
 
 # Hatch lint setup and scripts
 [tool.hatch.envs.lint]

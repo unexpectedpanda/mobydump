@@ -1,5 +1,41 @@
 # Changelog
 
+# v0.9.5 (22 November 2025)
+
+- _Feature_: Added `--discord` to send messages to a Discord webhook for observability
+  when using the update function. This can be useful when running scheduled updates on a
+  remote system like GitHub Actions.
+
+- _Feature_: Added `--skipdetails`, so you can download basic game information without
+  getting the extended details. This mainly exists to recreate caches in the `games`
+  folder in case they become corrupt or are deleted, and leaves the `games-details` folder
+  alone.
+
+- _Fix_: Dialled back overly aggressive deduping of game IDs when converting to delimited
+  formats. Previously, data was removed from any field that contained more than one value,
+  like alternate names and genres.
+
+- _Fix_: Added some protections to prevent inconsistent data being created when resuming
+  partially completed updates:
+
+    - If you attempt to resume an update, but change the number of days' updates that you
+      request, the update data is considered stale and is redownloaded from scratch with
+      the new settings.
+
+    - If you attempt to resume an update, but more than 6 hours has passed since the
+      partially complete update was initiated, the update data is considered stale and is
+      redownloaded from scratch.
+
+- _Fix_: Prevented `--forcerestart` from being used with `--writefromcache`.
+
+- _Fix_: It's possible to end up with game IDs in the alternate titles list that don't
+  specify any alternate titles. These empty entries are now stripped, and
+  `[SYSTEM_NAME] - Alternate titles.txt` files are no longer exported if no alternate
+  titles are specified.
+
+- _Fix_: It's possible to end up with game IDs in the genres list that don't specify any
+  genres. These empty entries are now stripped.
+
 # v0.9.4 (14 March 2025)
 
 - Added new MobyGames API plan details.

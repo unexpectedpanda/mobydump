@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import pathlib
+import shutil
 import sys
 import zipfile
 from typing import TYPE_CHECKING, Any
@@ -11,7 +13,8 @@ import dateutil
 import dropbox
 import numpy as np
 import pandas as pd
-from compress_json import compress, decompress # pip install compress-json-python
+from compress_json import compress, decompress  # pip install compress-json-python
+from discord import SyncWebhook
 from dropbox.exceptions import ApiError, AuthError
 from dropbox.files import WriteMode
 from natsort import natsorted
@@ -63,7 +66,16 @@ def delete_cache(cache_folder: int | str, config: Config) -> dict[str, bool | st
             game_file.unlink()
 
         # Rewrite the status file
-        completion_status = {'update_finished': False}
+        now = (
+            datetime.datetime.now(tz=datetime.timezone.utc)
+            .replace(tzinfo=datetime.timezone.utc)
+            .astimezone(tz=None)
+        )
+
+        completion_status = {
+            'update_finished': False,
+            'update_last_run': now.strftime("%Y/%m/%d %H:%M"),
+        }
 
         with open(
             pathlib.Path(config.cache).joinpath('updates.json'), 'w', encoding='utf-8'
@@ -77,10 +89,11 @@ def delete_cache(cache_folder: int | str, config: Config) -> dict[str, bool | st
             game_file.unlink()
 
         # Delete the game details files
-        for game_details_file in (
-            pathlib.Path(config.cache).joinpath(f'{cache_folder}/games-details/').glob('*.json')
-        ):
-            game_details_file.unlink()
+        if not config.args.skipdetails:
+            for game_details_file in (
+                pathlib.Path(config.cache).joinpath(f'{cache_folder}/games-details/').glob('*.json')
+            ):
+                game_details_file.unlink()
 
         # Rewrite the status file
         now = (
@@ -203,8 +216,11 @@ def get_games(
 
                 # Handle when the platform has no games
                 if len(game_dict['games']) == 0 and offset - offset_increment == 0:
-                    eprint(f'Looks like {platform_name} has no games, exiting...', level='warning')
-                    sys.exit()
+                    eprint(
+                        f'\nLooks like {platform_name} has no games, exiting...', level='warning'
+                    )
+                    shutil.rmtree(pathlib.Path(config.cache).joinpath(f'{platform_id}'))
+                    sys.exit(1)
 
                 request_wait(config)
             else:
@@ -248,53 +264,39 @@ def get_game_details(
         completion_status (dict[str, bool]): Which stages MobyDump has finished.
         config (Config): The MobyDump config object instance.
     """
-    now: datetime.datetime
+    if not config.args.skipdetails:
+        now: datetime.datetime
 
-    platform_str_length: int = len(f'Retrieving games from {platform_name} [ID: {platform_id}]')
-    horizontal_line_length: int = int((80 - platform_str_length - 10) / 2)
-    horizontal_line: str = '─' * horizontal_line_length
+        platform_str_length: int = len(f'Retrieving games from {platform_name} [ID: {platform_id}]')
+        horizontal_line_length: int = int((80 - platform_str_length - 10) / 2)
+        horizontal_line: str = '─' * horizontal_line_length
 
-    if list(pathlib.Path(config.cache).joinpath(f'{platform_id}/games-details/').glob('*.json')):
+        if list(
+            pathlib.Path(config.cache).joinpath(f'{platform_id}/games-details/').glob('*.json')
+        ):
+            eprint(
+                f'{Font.b}{horizontal_line} Retrieving games from {platform_name} [ID: {platform_id}] {horizontal_line}{Font.be}\n'
+            )
+
         eprint(
-            f'{Font.b}{horizontal_line} Retrieving games from {platform_name} [ID: {platform_id}] {horizontal_line}{Font.be}\n'
+            f'\n{Font.b}{Font.u}Stage 2{Font.end}\nGetting attributes, patches, ratings, and releases for each game.\n',
+            indent=0,
         )
 
-    eprint(
-        f'\n{Font.b}{Font.u}Stage 2{Font.end}\nGetting attributes, patches, ratings, and releases for each game.\n',
-        indent=0,
-    )
+        # Show a resume message if needed
+        if list(
+            pathlib.Path(config.cache).joinpath(f'{platform_id}/games-details/').glob('*.json')
+        ):
+            eprint('• Requests were previously interrupted, resuming...')
 
-    # Show a resume message if needed
-    if list(pathlib.Path(config.cache).joinpath(f'{platform_id}/games-details/').glob('*.json')):
-        eprint('• Requests were previously interrupted, resuming...')
+        # Get the game count
+        files: list[pathlib.Path] = natsorted(
+            list(pathlib.Path(config.cache).joinpath(f'{platform_id}/games/').glob('*.json'))
+        )
+        file_count: int = len(files)
+        game_count: int = file_count * 100 - 100
 
-    # Get the game count
-    files: list[pathlib.Path] = natsorted(
-        list(pathlib.Path(config.cache).joinpath(f'{platform_id}/games/').glob('*.json'))
-    )
-    file_count: int = len(files)
-    game_count: int = file_count * 100 - 100
-
-    with open(pathlib.Path(files[-1]), encoding='utf-8') as platform_request_cache:
-        cache: dict[str, Any] = json.loads(platform_request_cache.read())
-
-        try:
-            cache = decompress(cache)
-        except Exception:
-            pass
-
-        game_count = game_count + len(cache['games'])
-
-    game_iterator: int = 0
-
-    for game_file in natsorted(
-        pathlib.Path(config.cache).joinpath(f'{platform_id}/games/').glob('*.json')
-    ):
-
-        # Get the game IDs to download details for
-        games: list[tuple[int, str]] = []
-
-        with open(pathlib.Path(game_file), encoding='utf-8') as platform_request_cache:
+        with open(pathlib.Path(files[-1]), encoding='utf-8') as platform_request_cache:
             cache: dict[str, Any] = json.loads(platform_request_cache.read())
 
             try:
@@ -302,75 +304,94 @@ def get_game_details(
             except Exception:
                 pass
 
-            games = get_game_ids_and_titles(cache)
+            game_count = game_count + len(cache['games'])
 
-        # Only download game details that haven't been downloaded yet
-        for game in games:
-            game_iterator += 1
+        game_iterator: int = 0
 
-            game_id = game[0]
-            game_title = game[1]
+        for game_file in natsorted(
+            pathlib.Path(config.cache).joinpath(f'{platform_id}/games/').glob('*.json')
+        ):
 
-            if (
-                not pathlib.Path(config.cache)
-                .joinpath(f'{platform_id}/games-details/{game_id}.json')
-                .is_file()
-            ):
-                if not config.time_estimate_given:
-                    eta_string: str = time_estimate(config, game_count, game_iterator)
+            # Get the game IDs to download details for
+            games: list[tuple[int, str]] = []
+
+            with open(pathlib.Path(game_file), encoding='utf-8') as platform_request_cache:
+                cache: dict[str, Any] = json.loads(platform_request_cache.read())
+
+                try:
+                    cache = decompress(cache)
+                except Exception:
+                    pass
+
+                games = get_game_ids_and_titles(cache)
+
+            # Only download game details that haven't been downloaded yet
+            for game in games:
+                game_iterator += 1
+
+                game_id = game[0]
+                game_title = game[1]
+
+                if (
+                    not pathlib.Path(config.cache)
+                    .joinpath(f'{platform_id}/games-details/{game_id}.json')
+                    .is_file()
+                ):
+                    if not config.time_estimate_given:
+                        eta_string: str = time_estimate(config, game_count, game_iterator)
+
+                        eprint(
+                            f'{Font.heading}• Estimated completion time: {eta_string} (doesn\'t account for retries or response delays){Font.end}',
+                            wrap=False,
+                        )
+
+                        config.time_estimate_given = True
+
+                    now = (
+                        datetime.datetime.now(tz=datetime.timezone.utc)
+                        .replace(tzinfo=datetime.timezone.utc)
+                        .astimezone(tz=None)
+                    )
+
+                    game_response: requests.models.Response = api_request(
+                        f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform_id}?api_key={config.api_key}',
+                        config,
+                        message=f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})...',
+                        type='game-details',
+                    )
+
+                    if game_response.status_code == 404:
+                        request_wait(config)
+                        continue
+
+                    game_details: dict[str, Any] = game_response.json()
+
+                    with open(
+                        pathlib.Path(config.cache).joinpath(
+                            f'{platform_id}/games-details/{game_id}.json'
+                        ),
+                        'w',
+                        encoding='utf-8',
+                    ) as game_details_cache:
+                        game_details_cache.write(
+                            json.dumps(
+                                compress(game_details), separators=(',', ':'), ensure_ascii=False
+                            )
+                        )
+
+                    now = (
+                        datetime.datetime.now(tz=datetime.timezone.utc)
+                        .replace(tzinfo=datetime.timezone.utc)
+                        .astimezone(tz=None)
+                    )
 
                     eprint(
-                        f'{Font.heading}• Estimated completion time: {eta_string} (doesn\'t account for retries or response delays){Font.end}',
+                        f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})... done.\n',
+                        overwrite=True,
                         wrap=False,
                     )
 
-                    config.time_estimate_given = True
-
-                now = (
-                    datetime.datetime.now(tz=datetime.timezone.utc)
-                    .replace(tzinfo=datetime.timezone.utc)
-                    .astimezone(tz=None)
-                )
-
-                game_response: requests.models.Response = api_request(
-                    f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform_id}?api_key={config.api_key}',
-                    config,
-                    message=f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})...',
-                    type='game-details',
-                )
-
-                if game_response.status_code == 404:
                     request_wait(config)
-                    continue
-
-                game_details: dict[str, Any] = game_response.json()
-
-                with open(
-                    pathlib.Path(config.cache).joinpath(
-                        f'{platform_id}/games-details/{game_id}.json'
-                    ),
-                    'w',
-                    encoding='utf-8',
-                ) as game_details_cache:
-                    game_details_cache.write(
-                        json.dumps(
-                            compress(game_details), separators=(',', ':'), ensure_ascii=False
-                        )
-                    )
-
-                now = (
-                    datetime.datetime.now(tz=datetime.timezone.utc)
-                    .replace(tzinfo=datetime.timezone.utc)
-                    .astimezone(tz=None)
-                )
-
-                eprint(
-                    f'• [{now.strftime("%Y/%m/%d %H:%M:%S")}] Requesting details for {game_title} [ID: {game_id}] ({game_iterator:,}/{game_count:,})... done.\n',
-                    overwrite=True,
-                    wrap=False,
-                )
-
-                request_wait(config)
 
     # Write the completion status
     completion_status['stage_2_finished'] = True
@@ -455,11 +476,27 @@ def get_updates(config: Config) -> None:
     """
 
     Get updates from MobyGames, then check the ages of existing downloads in the cache
-    and update accordinglt.
+    and update accordingly.
 
     Args:
         config (Config): The MobyDump config object instance.
     """
+    discord_webhook: SyncWebhook | None = None
+
+    if config.args.discord:
+        if os.getenv('DISCORD_WEBHOOK'):
+            discord_webhook = SyncWebhook.from_url(str(os.getenv('DISCORD_WEBHOOK')))
+        else:
+            eprint(
+                '\nMobyDump needs a Discord webhook to continue. For instructions, see'
+                '\nthe readme.'
+                '\n\nExiting...',
+                level='error',
+                indent=0,
+                wrap=False,
+            )
+            sys.exit(1)
+
     eprint(f'{Font.b}{Font.u}Updates{Font.end}')
     eprint(
         'Getting game updates.\n',
@@ -492,6 +529,37 @@ def get_updates(config: Config) -> None:
                 )
                 resume = input('\n> ')
                 eprint('')
+        else:
+            if 'update_last_run' in completion_status:
+                if ['update_last_run']:
+                    # Don't resume a partially completed update if more than 6 hours has
+                    # passed
+                    now = datetime.datetime
+
+                    update_last_run = datetime.datetime.strptime(  # noqa: DTZ007
+                        completion_status['update_last_run'], '%Y/%m/%d %H:%M'
+                    )
+
+                    rd = dateutil.relativedelta.relativedelta(now, update_last_run)
+
+                    input(rd)
+
+                    if rd.hours > 6:
+                        eprint(
+                            '• Update cache is stale, redownloading update data from scratch.\n',
+                            level='warning',
+                        )
+
+                        resume = 'r'
+
+            if 'days_to_update' in completion_status and resume != 'r':
+                if completion_status['days_to_update'] != config.args.update:
+                    eprint(
+                        '• The number of days to update is different than the last time you requested an update, redownloading update data from scratch.\n',
+                        level='warning',
+                    )
+
+                resume = 'r'
 
     if config.args.writefromcache:
         resume = 'w'
@@ -500,6 +568,23 @@ def get_updates(config: Config) -> None:
         completion_status = delete_cache('updates', config)
     elif resume == 'q':
         sys.exit()
+
+    if discord_webhook:
+        now = (
+            datetime.datetime.now(tz=datetime.timezone.utc)
+            .replace(tzinfo=datetime.timezone.utc)
+            .astimezone(tz=None)
+        )
+
+        try:
+            discord_webhook.send('\u200B')
+            discord_webhook.send(f'# Starting updates {now.strftime("%Y/%m/%d")} ')
+            update_message = discord_webhook.send(
+                f'• Getting updates from MobyGames from the last **{config.args.update}** days...',
+                wait=True,
+            )
+        except Exception as e:
+            eprint(f'• Failed to send Discord message: {e}')
 
     # Start the update requests
     if not completion_status['update_finished']:
@@ -596,6 +681,15 @@ def get_updates(config: Config) -> None:
                 )
 
             # Write the completion status
+            now = (
+                datetime.datetime.now(tz=datetime.timezone.utc)
+                .replace(tzinfo=datetime.timezone.utc)
+                .astimezone(tz=None)
+            )
+
+            completion_status['update_last_run'] = now.strftime("%Y/%m/%d %H:%M")
+            completion_status['days_to_update'] = config.args.update
+
             with open(
                 pathlib.Path(config.cache).joinpath('updates.json'), 'w', encoding='utf-8'
             ) as status_cache:
@@ -606,6 +700,15 @@ def get_updates(config: Config) -> None:
                 break
 
     if completion_status['update_finished']:
+        if discord_webhook:
+            try:
+                discord_webhook.edit_message(
+                    update_message.id,
+                    content=f'• Getting updates from MobyGames from the last {config.args.update} days... done.',
+                )
+            except Exception as e:
+                eprint(f'• Failed to send Discord message: {e}')
+
         # Get the platform IDs
         if not pathlib.Path(config.cache).joinpath('platforms.json').is_file():
             get_platforms(config)
@@ -719,7 +822,7 @@ def get_updates(config: Config) -> None:
                         found_platform: bool = False
 
                         for platform_release in updated_game['platforms']:
-                            if platform_release['platform_id'] == platform["platform_id"]:
+                            if platform_release['platform_id'] == platform['platform_id']:
                                 updated_platform_related_games.append(updated_game)
                                 found_platform = True
 
@@ -747,6 +850,19 @@ def get_updates(config: Config) -> None:
 
                                 game_ids = game_ids | {x['game_id'] for x in cache['games']}
 
+                        if discord_webhook:
+                            original_number_of_games: int = len(game_ids)
+
+                            try:
+                                discord_webhook.send('\u200B')
+                                discord_webhook.send(f'## {platform["platform_name"]}')
+                                applying_updates_message = discord_webhook.send(
+                                    f'• Applying updates to the **{platform["platform_name"]}** platform [Platform ID: {platform["platform_id"]}]. As of the last update, it had **{original_number_of_games:,}** games.',
+                                    wait=True,
+                                )
+                            except Exception as e:
+                                eprint(f'• Failed to send Discord message: {e}')
+
                         # Add in game IDs if they don't exist
                         game_ids = game_ids | {x['game_id'] for x in updated_platform_related_games}
 
@@ -767,11 +883,28 @@ def get_updates(config: Config) -> None:
                                 level='warning',
                                 wrap=False,
                             )
+                            if discord_webhook:
+                                try:
+                                    discord_webhook.edit_message(
+                                        applying_updates_message.id,
+                                        content=f'• ~~Applying updates to the **{platform["platform_name"]}** platform [Platform ID: {platform["platform_id"]}]. As of the last update, it had **{original_number_of_games:,}** games.~~ _No updates found, skipping._',
+                                    )
+                                except Exception as e:
+                                    eprint(f'• Failed to send Discord message: {e}')
                             continue
+
+                        if discord_webhook:
+                            try:
+                                update_message = discord_webhook.send(
+                                    f'• Adding or updating **{len(updated_platform_related_games)}** games in the **{platform["platform_name"]}** platform cache, and deleting **{len(removed_game_ids)}** games...',
+                                    wait=True,
+                                )
+                            except Exception as e:
+                                eprint(f'• Failed to send Discord message: {e}')
 
                         # Recreate the cached files in the games folder
                         added_game_ids: set[int] = set()
-                        file_contents: list[str, Any] = []
+                        file_contents: list[str] = []
                         file_count: int = 0
                         last_id: int = 0
                         cache = {}
@@ -803,7 +936,8 @@ def get_updates(config: Config) -> None:
                                             except Exception:
                                                 pass
 
-                                    # Get the last ID in the cache file, and if we've exceeded it, don't check this file again
+                                    # Get the last ID in the cache file, and if we've
+                                    # exceeded it, don't check this file again
                                     last_id: int = max([x['game_id'] for x in cache['games']])
 
                                     # Grab the game ID entry from the cache file
@@ -814,7 +948,8 @@ def get_updates(config: Config) -> None:
                                 except Exception:
                                     pass
 
-                            # Check if modulo 100 == 0 or if it's the last game ID, and if so, write a temporary output file
+                            # Check if modulo 100 == 0 or if it's the last game ID, and if
+                            # so, write a temporary output file
                             if not len(file_contents) % 100 or game_id == sorted(game_ids)[-1]:
                                 json_contents: list[str] = json.dumps(
                                     file_contents, indent=2, ensure_ascii=False
@@ -887,12 +1022,53 @@ def get_updates(config: Config) -> None:
 
                         eprint('• Updating cache files... done.', overwrite=True)
 
-                        # Download new and updated game details, and remove game details files for those games that have been removed from the platform
+                        if discord_webhook:
+                            try:
+                                discord_webhook.edit_message(
+                                    update_message.id,
+                                    content=f'• Adding or updating **{len(updated_platform_related_games)}** games in the **{platform["platform_name"]}** platform cache, and deleting **{len(removed_game_ids)}** games... done.',
+                                )
+                                if len(removed_game_ids) / original_number_of_games > 0.05:
+                                    discord_webhook.send(
+                                        f'## ⚠️ WARNING: More than 5% of titles have been removed from the database for the **{platform["platform_name"]}** platform, check that this is valid ⚠️'
+                                    )
+                            except Exception as e:
+                                eprint(f'• Failed to send Discord message: {e}')
+
+                        # Download new and updated game details, and remove game details
+                        # files for those games that have been removed from the platform
                         if updated_platform_related_games:
                             eprint(
                                 f'• {len(updated_platform_related_games)} game IDs changed or were added: {", ".join([str(x["game_id"]) for x in sorted(updated_platform_related_games, key=lambda x: x["game_id"])])}'
                             )
                             eprint('• Downloading updated game details.')
+
+                            if discord_webhook:
+                                changed_game_ids: list[str] = [
+                                    f'[{x["game_id"]!s}](https://www.mobygames.com/game/{x["game_id"]!s}/)'
+                                    for x in sorted(
+                                        updated_platform_related_games, key=lambda x: x["game_id"]
+                                    )
+                                ]
+                                try:
+                                    discord_webhook.send(
+                                        '• Added or updated the following game IDs:'
+                                    )
+                                except Exception as e:
+                                    eprint(f'• Failed to send Discord message: {e}')
+
+                                game_id_chunk: int = 10
+
+                                # TODO: This should be executed async, as big game lists can really hold up the code
+                                for i in range(0, len(changed_game_ids), game_id_chunk):
+                                    try:
+                                        discord_webhook.send(
+                                            f'{", ".join(changed_game_ids[i:i+game_id_chunk])}',
+                                            suppress_embeds=True,
+                                            wait=True,
+                                        )
+                                    except Exception as e:
+                                        eprint(f'• Failed to send Discord message: {e}')
 
                             updated_platform_games_sorted = sorted(
                                 updated_platform_related_games, key=lambda x: x['game_id']
@@ -921,6 +1097,14 @@ def get_updates(config: Config) -> None:
                                         f'{Font.heading}• Estimated completion time: {eta_string} (doesn\'t account for retries or response delays){Font.end}',
                                         wrap=False,
                                     )
+
+                                    if discord_webhook:
+                                        try:
+                                            discord_webhook.send(
+                                                f'• Downloading extended details for individual games, estimated completion is in {eta_string} (doesn\'t account for retries or response delays)...'
+                                            )
+                                        except Exception as e:
+                                            eprint(f'• Failed to send Discord message: {e}')
 
                                     config.time_estimate_given = True
 
@@ -974,6 +1158,14 @@ def get_updates(config: Config) -> None:
 
                                 request_wait(config)
 
+                            if discord_webhook:
+                                try:
+                                    discord_webhook.send(
+                                        f'• Finished downloading extended game details for **{platform["platform_name"]}**.'
+                                    )
+                                except Exception as e:
+                                    eprint(f'• Failed to send Discord message: {e}')
+
                         if removed_game_ids:
                             eprint(
                                 f'• {len(removed_game_ids)} game IDs were removed: {", ".join([str(x) for x in sorted(removed_game_ids)])}'
@@ -995,21 +1187,66 @@ def get_updates(config: Config) -> None:
                                 '• Deleting removed games from the cache... done', overwrite=True
                             )
 
+                            if discord_webhook:
+                                try:
+                                    removed_game_ids_message: list[str] = [
+                                        f'[{x!s}](https://www.mobygames.com/game/{x}/)'
+                                        for x in sorted(removed_game_ids)
+                                    ]
+                                    discord_webhook.send('• Deleted the following game IDs:')
+                                    game_id_chunk = 10
+                                    for i in range(0, len(removed_game_ids_message), game_id_chunk):
+                                        discord_webhook.send(
+                                            f'{", ".join(removed_game_ids_message[i:i+game_id_chunk])}',
+                                            suppress_embeds=True,
+                                            wait=True,
+                                        )
+                                except Exception as e:
+                                    eprint(f'• Failed to send Discord message: {e}')
+
                         # Write out the files for the platform
+                        if discord_webhook:
+                            try:
+                                output_message = discord_webhook.send(
+                                    '• Generating output files...', wait=True
+                                )
+                            except Exception as e:
+                                eprint(f'• Failed to send Discord message: {e}')
+
                         write_output_files(
                             config, platform['platform_id'], platform['platform_name']
                         )
+
+                        if discord_webhook:
+                            try:
+                                discord_webhook.edit_message(
+                                    output_message.id, content='• Generating output files... done.'
+                                )
+                                discord_webhook.send(
+                                    content=f'• The **{platform["platform_name"]}** platform [Platform ID: {platform["platform_id"]}] now has **{len(game_ids):,}** games.'
+                                )
+                                discord_webhook.send('───')
+                                discord_webhook.send(
+                                    f'{platform['platform_name']} update completed'
+                                )
+                                discord_webhook.send('───')
+                            except Exception as e:
+                                eprint(f'• Failed to send Discord message: {e}')
+
                     else:
                         eprint('• No games needed to be updated.')
+    if discord_webhook:
+        discord_webhook.send('\u200B')
+        discord_webhook.send('### Updates complete')
 
 
 def time_estimate(config, game_count, game_iterator) -> str:
     eta: datetime.timedelta = datetime.timedelta(
-        seconds=int((game_count - game_iterator) * (config.rate_limit + 1.25))
+        seconds=int((game_count - game_iterator) * (config.rate_limit + 1.6))
     )
 
     if not eta:
-        eta: datetime.timedelta = datetime.timedelta(seconds=int((1) * (config.rate_limit + 1.25)))
+        eta: datetime.timedelta = datetime.timedelta(seconds=int((1) * (config.rate_limit + 1.6)))
 
     eta_list: list[str] = []
     eta_string: str = ''
@@ -1087,7 +1324,8 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
 
         json_file_contents: list[str] = ['{\n  "games": [\n']
 
-        # Guard against duplicates, which can possibly be in cache files due to timing issues between requests
+        # Guard against duplicates, which can possibly be in cache files due to timing
+        # issues between requests
         game_id_check: set[int] = set()
 
         for game_file in (
@@ -1242,11 +1480,18 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
             0, 'game_id', games_alternate_titles_dataframe.pop('game_id')
         )
 
+        # Remove lines with no alternate title
+        if 'title' in games_alternate_titles_dataframe:
+            games_alternate_titles_dataframe['title'] = games_alternate_titles_dataframe[
+                'title'
+            ].replace('', np.nan)
+            games_alternate_titles_dataframe.dropna(subset=['title'], inplace=True)
+
         # Split out genres into their own dataframe
         genres_dataframe = games_dataframe.filter(['genres', 'game_id'])
         games_dataframe.pop('genres')
 
-        # Expand genres and add the game ID
+        # Expand genres, add the game ID, and convert some columns to integers
         genres_dataframe = genres_dataframe.explode('genres', ignore_index=True)
 
         exploded_genres = pd.json_normalize(genres_dataframe['genres'])  # type: ignore
@@ -1254,6 +1499,18 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
 
         genres_dataframe = exploded_genres
         genres_dataframe.insert(0, 'game_id', genres_dataframe.pop('game_id'))
+
+        # Remove lines with no genre category
+        if 'genre_category' in genres_dataframe:
+            genres_dataframe['genre_category'] = genres_dataframe['genre_category'].replace(
+                '', np.nan
+            )
+            genres_dataframe.dropna(subset=['genre_category'], inplace=True)
+
+        genres_dataframe['genre_category_id'] = (
+            genres_dataframe['genre_category_id'].fillna(0).astype(int)
+        )
+        genres_dataframe['genre_id'] = genres_dataframe['genre_id'].fillna(0).astype(int)
 
         # Get individual game details data
         games_details: list[dict[str, Any]] = []
@@ -1280,7 +1537,7 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
                     game_response: requests.models.Response = api_request(
                         f'https://api.mobygames.com/v1/games/{game_id}/platforms/{platform_id}?api_key={config.api_key}',
                         config,
-                        message=f'• [Re-requesting details for game ID: {game_id}, as it seems to be corrupt...',
+                        message=f'• Re-requesting details for game ID: {game_id}, as it seems to be corrupt...',
                         type='game-details',
                     )
 
@@ -1311,13 +1568,21 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
                     request_wait(config)
 
                     eprint(
-                        f'• [Re-requesting details for game ID: {game_id}, as it seems to be corrupt... done.',
+                        f'• Re-requesting details for game ID: {game_id}, as it seems to be corrupt... done.',
                         overwrite=True,
                     )
 
                     games_details.append(game_details)
 
         games_details = sorted(games_details, key=lambda x: x['game_id'])
+
+        if not games_details:
+            eprint(
+                f'\nLooks like {platform_name} has extended game details missing, you might have downloaded with '
+                '--skipdetails. You need to redownload this platform without --skipdetails to continue. Exiting...',
+                level='warning',
+            )
+            sys.exit()
 
         # Handle attributes
         attributes_dataframe = pd.json_normalize(
@@ -1381,10 +1646,13 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
             # Sanitize the dataframe
             dataframe = sanitize_dataframes(dataframe)
 
-            # Remove duplicates, which can possibly be in cache files due to timing issues between requests
-            dataframe = dataframe.drop_duplicates(subset=['game_id'])
+            # Remove duplicates where appropriate, which can possibly be in cache files
+            # due to timing issues between requests
+            if dataframe.equals(games_dataframe):
+                dataframe = dataframe.drop_duplicates(subset=['game_id'])
 
-            # Write to delimited file, using a BOM so Microsoft apps interpret the encoding correctly
+            # Write to delimited file, using a BOM so Microsoft apps interpret the
+            # encoding correctly
             dataframe.to_csv(output_file, index=False, encoding='utf-8-sig', sep=config.delimiter)
 
             compress_files.append(pathlib.Path(output_file))
@@ -1395,7 +1663,10 @@ def write_output_files(config: Config, platform_id: int, platform_name: str) -> 
 
         write_file(games_dataframe, f'{output_path_prefix} - (Primary) Games.txt')
 
-        if len(games_alternate_titles_dataframe.index) > 0:
+        if (
+            'title' in games_alternate_titles_dataframe
+            and len(games_alternate_titles_dataframe.index) > 0
+        ):
             write_file(
                 games_alternate_titles_dataframe,
                 f'{output_path_prefix} - Alternate titles.txt',
