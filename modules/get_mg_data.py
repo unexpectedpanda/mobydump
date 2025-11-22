@@ -1225,11 +1225,9 @@ def get_updates(config: Config) -> None:
                                 discord_webhook.send(
                                     content=f'• The **{platform["platform_name"]}** platform [Platform ID: {platform["platform_id"]}] now has **{len(game_ids):,}** games.'
                                 )
-                                discord_webhook.send('───')
                                 discord_webhook.send(
-                                    f'{platform['platform_name']} update completed'
+                                    f'• {platform['platform_name']} update completed'
                                 )
-                                discord_webhook.send('───')
                             except Exception as e:
                                 eprint(f'• Failed to send Discord message: {e}')
 
