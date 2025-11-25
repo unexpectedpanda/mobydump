@@ -1153,10 +1153,10 @@ def get_updates(config: Config) -> None:
                                     content=f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Generating output files... done.',
                                 )
                                 discord_webhook.send(
-                                    content=f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] The **{platform["platform_name"]}** platform [Platform ID: {platform["platform_id"]}] now has **{len(game_ids):,}** games.'
+                                    content=f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] Prior game count: **{original_number_of_games:,}**. New game count: **{len(game_ids):,}**'
                                 )
                                 discord_webhook.send(
-                                    f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] {platform['platform_name']} update completed'
+                                    f'• [{get_datetime().strftime("%Y/%m/%d %H:%M:%S")}] **{platform['platform_name']}** update completed'
                                 )
                             except Exception as e:
                                 eprint(f'• Failed to send Discord message: {e}')
